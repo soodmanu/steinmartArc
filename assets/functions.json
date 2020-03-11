@@ -65,7 +65,7 @@
       "virtualPath": "./dist\\storefront.manifest.all.js",
       "actionId": "http.storefront.pages.orderConfirmation.request.after"
     },
-	{
+    {
       "id": "CommonRoute",
       "virtualPath": "./dist\\storefront.manifest.all.js",
       "actionId": "CommonRoute"

@@ -1,6 +1,6 @@
 var needle = require('needle');
 var async = require('async');
-var _ = require('underscore');
+
 var apiContext = require('mozu-node-sdk/clients/platform/application')();
 var accountAttrDefinition = require('mozu-node-sdk/clients/commerce/customer/attributedefinition/attribute')(apiContext);
 var accountAttributes = require('mozu-node-sdk/clients/commerce/customer/accounts/customerAttribute')(apiContext);
@@ -69,27 +69,6 @@ module.exports = function(context, callback) {
 		    callback();
 		});
 
-	} else {
-		console.log("ELSE CCPA Part");
-		var details = context.request.body;
-		console.log("Body : "+details);
-		console.log("Code : "+details.prodCode);
-		var prodCode = details.prodCode;
-		var url = "https://costplus-harmon.baynote.net/recs/1/costplus_harmon?&attrs=Price&attrs=ProductId&attrs=ThumbUrl&attrs=Title&attrs=url&attrs=ProductCode&productId="+prodCode+"&page=pdp&format=json";
-		needle.get(url,function(err, response, body){
-		    var data = _.filter(body.widgetResults, function(arr) {
-		    	return arr.id === "quickview";
-		    });
-		    console.log("Success : "+JSON.stringify(data));
-		    context.response.body = data;
-		    console.log("Body : "+context.response.body);
-		    callback();
-		}, function(err) {
-			console.log("Error : "+JSON.stringify(err));
-		    context.response.body = "FAILED";
-		    callback();
-		});
-	}
-
+	} 
 
 };

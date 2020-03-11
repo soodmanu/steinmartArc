@@ -1,0 +1,74 @@
+{
+  "exports": [
+    {
+      "id": "http.commerce.catalog.storefront.products.getProduct.after",
+      "virtualPath": "./dist\\commerce.catalog.storefront.products.manifest.all.js",
+      "actionId": "http.commerce.catalog.storefront.products.getProduct.after"
+    },
+    {
+      "id": "embedded.commerce.orders.action.before",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "embedded.commerce.orders.action.before"
+    },
+    {
+      "id": "embedded.commerce.orders.action.after",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "embedded.commerce.orders.action.after"
+    },
+    {
+      "id": "http.commerce.orders.setFulFillmentInfo.before",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "http.commerce.orders.setFulFillmentInfo.before"
+    },
+    {
+      "id": "http.commerce.orders.setFulFillmentInfo.after",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "http.commerce.orders.setFulFillmentInfo.after"
+    },
+    {
+      "id": "http.commerce.orders.setBillingInfo.before",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "http.commerce.orders.setBillingInfo.before"
+    },
+    {
+      "id": "http.commerce.orders.setBillingInfo.after",
+      "virtualPath": "./dist\\commerce.orders.manifest.all.js",
+      "actionId": "http.commerce.orders.setBillingInfo.after"
+    },
+    {
+      "id": "embedded.commerce.payments.action.performPaymentInteraction",
+      "virtualPath": "./dist\\commerce.payments.manifest.all.js",
+      "actionId": "embedded.commerce.payments.action.performPaymentInteraction"
+    },
+    {
+      "id": "embedded.commerce.payments.action.before",
+      "virtualPath": "./dist\\commerce.payments.manifest.all.js",
+      "actionId": "embedded.commerce.payments.action.before"
+    },
+    {
+      "id": "embedded.commerce.payments.action.after",
+      "virtualPath": "./dist\\commerce.payments.manifest.all.js",
+      "actionId": "embedded.commerce.payments.action.after"
+    },
+    {
+      "id": "http.storefront.pages.productDetails.request.after",
+      "virtualPath": "./dist\\storefront.manifest.all.js",
+      "actionId": "http.storefront.pages.productDetails.request.after"
+    },
+    {
+      "id": "http.storefront.pages.orderConfirmation.request.before",
+      "virtualPath": "./dist\\storefront.manifest.all.js",
+      "actionId": "http.storefront.pages.orderConfirmation.request.before"
+    },
+    {
+      "id": "http.storefront.pages.orderConfirmation.request.after",
+      "virtualPath": "./dist\\storefront.manifest.all.js",
+      "actionId": "http.storefront.pages.orderConfirmation.request.after"
+    },
+	{
+      "id": "CommonRoute",
+      "virtualPath": "./dist\\storefront.manifest.all.js",
+      "actionId": "CommonRoute"
+    }
+  ]
+}

@@ -22,5 +22,7 @@
  */
 
 module.exports = function(context, callback) {
+ var items = context.items;
+  console.log("manu"+items);
   callback();
 };

@@ -345,6 +345,8 @@ module.exports = function(context, callback) {
  */
 
 module.exports = function(context, callback) {
+ var items = context.items;
+  console.log("manu"+items);
   callback();
 };
 },{}],5:[function(require,module,exports){
@@ -399,6 +401,8 @@ module.exports = function(context, callback) {
  */
 
 module.exports = function(context, callback) {
+  
+  console.log ("inside order fullfillment");
   callback();
 };
 },{}],7:[function(require,module,exports){

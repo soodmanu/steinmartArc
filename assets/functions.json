@@ -6,6 +6,11 @@
       "actionId": "http.commerce.catalog.storefront.products.getProduct.after"
     },
     {
+      "id": "http.commerce.catalog.storefront.tax.estimateTaxes.after",
+      "virtualPath": "./dist\\commerce.catalog.storefront.tax.manifest.all.js",
+      "actionId": "http.commerce.catalog.storefront.tax.estimateTaxes.after"
+    },
+    {
       "id": "embedded.commerce.orders.action.before",
       "virtualPath": "./dist\\commerce.orders.manifest.all.js",
       "actionId": "embedded.commerce.orders.action.before"
@@ -56,6 +61,11 @@
       "actionId": "http.storefront.pages.productDetails.request.after"
     },
     {
+      "id": "http.storefront.pages.checkout.request.after",
+      "virtualPath": "./dist\\storefront.manifest.all.js",
+      "actionId": "http.storefront.pages.checkout.request.after"
+    },
+    {
       "id": "http.storefront.pages.orderConfirmation.request.before",
       "virtualPath": "./dist\\storefront.manifest.all.js",
       "actionId": "http.storefront.pages.orderConfirmation.request.before"
@@ -64,11 +74,6 @@
       "id": "http.storefront.pages.orderConfirmation.request.after",
       "virtualPath": "./dist\\storefront.manifest.all.js",
       "actionId": "http.storefront.pages.orderConfirmation.request.after"
-    },
-    {
-      "id": "CommonRoute",
-      "virtualPath": "./dist\\storefront.manifest.all.js",
-      "actionId": "CommonRoute"
     }
   ]
 }

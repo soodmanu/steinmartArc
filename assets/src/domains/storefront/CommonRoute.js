@@ -1,5 +1,6 @@
 var needle = require('needle');
 var async = require('async');
+var _ = require('underscore');
 
 var apiContext = require('mozu-node-sdk/clients/platform/application')();
 var accountAttrDefinition = require('mozu-node-sdk/clients/commerce/customer/attributedefinition/attribute')(apiContext);

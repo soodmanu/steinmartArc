@@ -22,5 +22,7 @@
  */
 
 module.exports = function(context, callback) {
+  
+  console.log ("inside order fullfillment");
   callback();
 };

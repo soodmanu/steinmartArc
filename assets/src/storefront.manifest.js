@@ -18,5 +18,6 @@ module.exports = {
   'http.storefront.pages.orderConfirmation.request.after': {
       actionName: 'http.storefront.pages.orderConfirmation.request.after',
       customFunction: require('./domains/storefront/http.storefront.pages.orderConfirmation.request.after')
-  }
+  },
+  
 };

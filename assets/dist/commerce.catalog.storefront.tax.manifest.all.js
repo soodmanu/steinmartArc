@@ -4,378 +4,788 @@ module.exports = {
   'http.commerce.catalog.storefront.tax.estimateTaxes.after': {
       actionName: 'http.commerce.catalog.storefront.tax.estimateTaxes.after',
       customFunction: require('./domains/commerce.catalog.storefront.tax/http.commerce.catalog.storefront.tax.estimateTaxes.after')
+  },
+  
+   'http.commerce.catalog.storefront.tax.estimateTaxes.before': {
+      actionName: 'http.commerce.catalog.storefront.tax.estimateTaxes.before',
+      customFunction: require('./domains/commerce.catalog.storefront.tax/http.commerce.catalog.storefront.tax.estimateTaxes.before')
   }
 };
 
-},{"./domains/commerce.catalog.storefront.tax/http.commerce.catalog.storefront.tax.estimateTaxes.after":2}],2:[function(require,module,exports){
-/**
- * Implementation for http.commerce.catalog.storefront.tax.estimateTaxes.after
+},{"./domains/commerce.catalog.storefront.tax/http.commerce.catalog.storefront.tax.estimateTaxes.after":2,"./domains/commerce.catalog.storefront.tax/http.commerce.catalog.storefront.tax.estimateTaxes.before":3}],2:[function(require,module,exports){
+  /**
+   * Implementation for http.commerce.catalog.storefront.tax.estimateTaxes.after
 
 
- * HTTP Actions all receive a similar context object that includes
- * `request` and `response` objects. These objects are similar to
- * http.IncomingMessage objects in NodeJS.
+   * HTTP Actions all receive a similar context object that includes
+   * `request` and `response` objects. These objects are similar to
+   * http.IncomingMessage objects in NodeJS.
 
-{
-  configuration: {},
-  request: http.ClientRequest,
-  response: http.ClientResponse
-}
+  {
+    configuration: {},
+    request: http.ClientRequest,
+    response: http.ClientResponse
+  }
 
- * Call `response.end()` to end the response early.
- * Call `response.set(headerName)` to set an HTTP header for the response.
- * `request.headers` is an object containing the HTTP headers for the request.
- * 
- * The `request` and `response` objects are both Streams and you can read
- * data out of them the way that you would in Node.
+   * Call `response.end()` to end the response early.
+   * Call `response.set(headerName)` to set an HTTP header for the response.
+   * `request.headers` is an object containing the HTTP headers for the request.
+   * 
+   * The `request` and `response` objects are both Streams and you can read
+   * data out of them the way that you would in Node.
 
- */
+   */
+  var xml2js = require('xml2js');
+  var parseString = require('xml2js').parseString;
+  var _  = require('underscore');
+  var https = require("https");
 
-var orderResourceFactory = require('mozu-node-sdk/clients/commerce/order');
-var checkoutResourceFactory = require('mozu-node-sdk/clients/commerce/checkout');
-var mozuConstants = require("mozu-node-sdk/constants");
-var xml2js = require('xml2js');
-var parseString = require('xml2js').parseString;
-var _  = require('underscore');
-var https = require("https");
-module.exports = function(context, callback) {
-var requestBody = JSON.parse(JSON.stringify(context.request.body));	
-console.log("inside tax"+JSON.stringify(context.request.body));
-var shippingCode = requestBody.ShippingMethodCode;
-var responseBody = JSON.parse(JSON.stringify(context.response.body));
+  module.exports = function(context, callback) {
+  //var orderResource = require('mozu-node-sdk/clients/commerce/order')(context);
+  var OrderAttributeClient = require("mozu-node-sdk/clients/commerce/orders/orderAttribute");
+  var requestBody = context.request.body; 
+  var responseBody = context.response.body;
+  var items=requestBody.lineItems;
+  var orderAttributeClient = OrderAttributeClient(context);
+  orderAttributeClient.context['user-claims'] = null;
+  //orderResource.context['user-claims'] = null;
 
-console.log("inside tax"+JSON.stringify(context.response.body));
-console.log("line items lenght"+JSON.stringify(requestBody.LineItems.length));
-//var checkoutModel = context.response.body.model;
+ console.log("responseBody"+JSON.stringify(context.response.body));
+ console.log("requestBody"+JSON.stringify(requestBody));
+ 
+ 
+if(requestBody.taxContext.destinationAddress !== ""){
   var obj = {
-  'TaxDutyQuoteRequest': {
-    $: {
-      'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
-	  
-	 },
-	'Currency':"USD",
-	'VATInclusivePricing':"false",
-	"BillingInformation":"",
-    "Shipping":{
-		"ShipGroups":{
-			"ShipGroup":{
-				$: {
-					"id": "ShipGroup_1",
-					"chargeType" : "WEIGHTBASED"
-				},
-				"DestinationTarget":{
-					$: {
-						"ref":"Dest_1"
-					}
-				 },
-				'Items':{
-				"OrderItem":[]
-				
-				}
-			}
-		},
-	 
-	 "Destinations":{
-		"MailingAddress":{
-			$: {
-				"id":"Dest_1"
-			},
-		 "PersonName":{
-			 "LastName":"Steinmart",/*checkoutModel.destinations[0].destinationContact.firstName,need to be populated from mozu object*/
-			 "FirstName":"Steinmart"/*checkoutModel.destinations[0].destinationContact.lastNameOrSurname,need to be populated from mozu object*/
-		  },
-		 "Address":{
-		    "Line1":requestBody.TaxContext.DestinationAddress.Address1,
-			"Line2":requestBody.TaxContext.DestinationAddress.Address2,
-			"City":requestBody.TaxContext.DestinationAddress.CityOrTown,
-			"MainDivision":requestBody.TaxContext.DestinationAddress.StateOrProvince,
-			"CountryCode":requestBody.TaxContext.DestinationAddress.CountryCode,
-			"PostalCode":requestBody.TaxContext.DestinationAddress.PostalOrZipCode
-		}
-	  }
-			
-	}
-	}
-  }
-};
-var items=requestBody.LineItems;
-/*var themeSettings = JSON.parse(JSON.stringify(context.items.siteContext.themeSettings));
-	console.log("JSON : "+themeSettings.adminOriginStreet);*/
-var taxclass="";
-var totalChargeablePrice = "";
-var shippingChargeableItems = [];
-var shippingchargeableItemCost = "";
-var shippingDiscountAmount = 0;
-var shippingDiscounts = requestBody.ShippingDiscounts;
-console.log("shippingDiscounts"+shippingDiscounts);
-if(shippingDiscounts !== null && shippingDiscounts !== 'undefined'){
-	 shippingDiscountAmount =  shippingDiscounts[0].Impact;
-}
-_.each(items, function(itemData,index){
-	totalChargeablePrice += itemData.lineItemPrice;
-	var productAttribute = itemData.ProductProperties;
-	
-	productAttribute.forEach(function(attr){
-     if(attr.attributeFQN === 'tenant~chargeshipping'){
-		 shippingChargeableItems.push(itemData.ProductCode);
-		 shippingchargeableItemCost += shippingchargeableItemCost+ itemData.LineItemPrice;
-	 }
-	 });
-});
-var shippingChargeableItemCount = 1;
-_.each(items, function(itemData,index){
-	
-	var storefrontOrderAttributes = itemData.ProductProperties;
-	
-		
-	 storefrontOrderAttributes.forEach(function(attr){
-                              var attrVal;
-							  
-                              if(attr.attributeFQN === 'tenant~taxclass'){
-                                  attrVal = attr.values;
-								  var taxvalues = attrVal[0].value;
-								  var taxvaluearray = taxvalues.split(",");
-								  for (var i = 0; i < taxvaluearray.length; i++) {
-									  var value = taxvaluearray[i];
-									  var productCode =  value.substr(0,value.indexOf(":"));
-									  if(productCode === itemData.productCode){
-										  taxclass = value.substr(value.indexOf(":")+1,value.length);
-										  console.log("manu"+taxclass);
-									  }
-									}
-								  
-								  
-								  
-                                  
-                              }                    
-      });
-	
-	obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem.push({
-		$: {
-			'lineNumber':"21687012"/*need to be populated from mozu object*/
-		  
-		},
-		"ItemId":'25-65845760',/*itemData.product.productCode,need to be populated from mozu object*/
-		"ItemDesc":"undefined",
-		"ScreenSize":"0",
-		"Origins":{
-			"AdminOrigin":{
-				"Line1":"Stein Mart, Inc.",/*themeSettings.adminOriginStreet, need to be populated from mozu object*/
-				"City":"King Of Prussia",/*themeSettings.adminOriginCity, need to be populated from mozu object*/
-				"MainDivision":"PA",/*themeSettings.adminOriginMainDivision,need to be populated from mozu object*/
-				"CountryCode":"US",/*themeSettings.adminOriginCountryCode,need to be populated from mozu object*/
-				"PostalCode":"19406"/*themeSettings.adminOriginPostalCode*/
-			},
-			"ShippingOrigin":{
-				"Line1":"3375 Joseph Martin Highway",/*themeSettings.shippingOriginStreet, need to be populated from mozu object*/
-				"City":"Martinsville",/*themeSettings.shippingOriginCity,need to be populated from mozu object*/
-				"MainDivision":"VA",/*themeSettings.shippingOriginMainDivision,need to be populated from mozu object*/
-				"CountryCode":"US",/*themeSettings.shippingOriginCountryCode,need to be populated from mozu object*/
-				"PostalCode":"24112"/*themeSettings.shippingOriginPostalCode*/
-			}
-		},
-		"Quantity":itemData.Quantity,/*need to be populated from mozu object*/
-		"Pricing":{
-			"Merchandise":{
-				"Amount":itemData.DiscountedTotal/itemData.Quantity,/*need to be populated from mozu object*/
-				"TaxClass":"61000",/*need to be populated from mozu object*/
-				
-			},
-			
-		}
-			
-    });
-	
-	if(requestBody.OrderDiscount.Impact > 0){
-		var discountAmount = (itemData.DiscountedTotal - itemData.LineItemPrice)/itemData.Quantity;
-	var  merchandiseObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Merchandise ;
-
-	Object.assign(merchandiseObj,{
-		"PromotionalDiscounts":{
-					"Discount":{
-						$: {
-							'id':'ItemDisc_001',
-							"calculateDuty":"false"
-		  
-						},
-						"Amount":discountAmount
-					}
-				}
-	
-	});
-	
-	}
-	var  merchandiseUnitPrice = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Merchandise ;
-	var unitPrice = itemData.LineItemPrice/itemData.Quantity;
-	Object.assign(merchandiseUnitPrice,{
-		"UnitPrice":unitPrice
-	});	
-	if (shippingChargeableItems.includes(itemData.ProductCode)) {
-	
-		var prorateShippingAmount = getProrateShippingAmount(itemData.lineItemPrice,totalChargeablePrice,checkoutModel.shippingTotal);
-		var  pricingObj =  obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing;
-		Object.assign(pricingObj,{
-		"Shipping":{
-				"Amount":prorateShippingAmount,/*need to be populated from mozu object*/
-				"TaxClass":"93000"/*need to be populated from mozu object*/
-			}
-		});	
-		
-		if(shippingDiscountAmount > 0 ){
-		var prorateShippingDiscountAmount = getProrateShippingAmount(itemData.LineItemPrice,totalChargeablePrice,shippingDiscountAmount);
-			
-		var shippingObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Shipping;
-		Object.assign(shippingObj,{
-		"PromotionalDiscounts":{
-					"Discount":{
-						$: {
-							'id':'ItemDisc_001',
-							"calculateDuty":"false"
-		  
-						},
-						"Amount":itemData.prorateShippingDiscountAmount
-					}
-				}
-		});	
-			
-			
-		}
-		++shippingChargeableItemCount;
-	}else{
-		var  pricingObj2 =  obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing;
-		Object.assign(pricingObj2,{
-		"Shipping":{
-				"Amount":"0.0",/*need to be populated from mozu object*/
-				"TaxClass":"93000"/*need to be populated from mozu object*/
-			}
-		});	
-	}		
-});
-function getProrateShippingAmount(sellPrice,totalChargeablePrice,shipingTotal){
-	console.log("shippingAmount"+shippingAmount);
-	var shippingAmount = (sellPrice * shipingTotal)/ totalChargeablePrice; 
-	return shippingAmount.toFixed(2) ;
+    'TaxDutyQuoteRequest': {
+      $: {
+        'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
+      
+     },
+    'Currency':"USD",
+    'VATInclusivePricing':"false",
+    "BillingInformation":"",
+      "Shipping":{
+      "ShipGroups":{
+        "ShipGroup":{
+          $: {
+            "id": "ShipGroup_1",
+            "chargeType" : "WEIGHTBASED"
+          },
+          "DestinationTarget":{
+            $: {
+              "ref":"Dest_1"
+            }
+           },
+          'Items':{
+          "OrderItem":[]
+          
+          }
+        }
+      },
+     
+     "Destinations":{
+      "MailingAddress":{
+        $: {
+          "id":"Dest_1"
+        },
+       "PersonName":{
+         "LastName":"Steinmart",
+         "FirstName":"Steinmart"
+        },
+       "Address":{
+        "Line1":requestBody.taxContext.destinationAddress.address1,
+        "Line2":requestBody.taxContext.destinationAddress.address2,
+        "City":requestBody.taxContext.destinationAddress.cityOrTown,
+        "MainDivision":requestBody.taxContext.destinationAddress.stateOrProvince,
+        "CountryCode":requestBody.taxContext.destinationAddress.countryCode,
+        "PostalCode":requestBody.taxContext.destinationAddress.postalOrZipCode
+      }
+      }
+        
+    }
+    }
+    }
+  };
+  
+  var estimateDateObj = {
+    'InventoryDetailsRequestMessage': {
+      $: {
+        'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
 		 
-}
-var builder = new xml2js.Builder();
-var xmlDoc = builder.buildObject(obj);
-console.log(xmlDoc);
-var options = {
-                 method : 'POST',
-				 hostname: 'uat01-epapi-na.gsipartners.com',
-                 path: '/v1.0/stores/SMTUS/taxes/quote.xml',				 
-				 headers: {
-					'apiKey':'w7fRGlH0IDTznzIgOl9KfWFfggkUkI62',
+      
+     },
+	
+    'OrderItem':[]
+    
+    }
+  };
+  
+  var inventoryAddressDetail = [];
+
+	var shippingCode = requestBody.shippingMethodCode;
+	var	ShippingMethodName = requestBody.shippingMethodName;
+	
+		
+	_.each(items, function(itemData,index){
+		estimateDateObj.InventoryDetailsRequestMessage.OrderItem.push({
+			  $: {
+				 lineId:itemData.id ,
+				 itemId:"25-"+itemData.variantProductCode
+				
+			  },
+			  "Quantity":itemData.quantity,
+			  "ShipmentDetails":{
+				"ShippingMethod":ShippingMethodName,
+				"ShipToAddress":{
+					"Line1":requestBody.taxContext.destinationAddress.address1,
+					"City":requestBody.taxContext.destinationAddress.cityOrTown,
+					"MainDivision":requestBody.taxContext.destinationAddress.stateOrProvince,
+					"CountryCode":requestBody.taxContext.destinationAddress.countryCode,
+					"PostalCode":requestBody.taxContext.destinationAddress.postalOrZipCode
+				 }
+				}
+			  
+		    });
+		 });
+
+		  var builder = new xml2js.Builder();
+		  var xmlDoc = builder.buildObject(estimateDateObj);
+		 
+		  var hostName = context.configuration.hostname;
+		  var deliveryPath = context.configuration.estimatedDeliverydatePath;
+		  var deliveyDateRadialKey = context.configuration.deliveyDateRadialKey;
+		   console.log(hostName);
+		   console.log(deliveryPath);
+		   console.log(deliveyDateRadialKey);
+		  var options = {
+				   method : 'POST',
+				   hostname: hostName,
+				   path: deliveryPath,         
+				   headers: {
+					'apiKey':deliveyDateRadialKey,
 					'Content-Type':'application/xml',
 					'Content-Length':xmlDoc.length,
-				 },
-				
-				
-			};
-var data = '';
+				   },
+				  
+				  
+				};
+		  console.log(JSON.stringify(options));
+		  var data = '';
 
-call = function(response) {
-	
-	response.on('data', function (chunk) {
-		data += chunk;
+		  call = function(response) {
+			
+			response.on('data', function (chunk) {
+			  data += chunk;
+			  
+			});
+			response.on('end', function(){
+			   parseString(data, function (err, result) {
+				
+				var resultObj = JSON.stringify(result);
+				console.log("resultObj"+resultObj);
+				var inventoryDetails = result.InventoryDetailsResponseMessage.InventoryDetails;
+			    console.log("orderItems"+inventoryDetails.length);
+			   if (result.InventoryDetailsResponseMessage.InventoryDetails !== "" ) {
+				try {
+				  for (var i = 0; i < inventoryDetails.length; i++) {
+					var inventoryDetail = inventoryDetails[i].InventoryDetail;
+					console.log("inventoryDetails length"+i+inventoryDetail.length);
+					 for (var j = 0; j < inventoryDetail.length; ++j) {
+						 console.log("inventoryDetail"+inventoryDetail[j].$.lineId);
+						 console.log("inventoryDetail"+inventoryDetail[j].ShipFromAddress[0].Line1);
+						 inventoryAddressDetail.push({
+							 "lineId":inventoryDetail[j].$.lineId,
+							 "ShippingOrigin":{
+								  "Line1":inventoryDetail[j].ShipFromAddress[0].Line1,
+								  "City":inventoryDetail[j].ShipFromAddress[0].City,
+								  "MainDivision":inventoryDetail[j].ShipFromAddress[0].MainDivision,
+								  "CountryCode":inventoryDetail[j].ShipFromAddress[0].CountryCode,
+								  "PostalCode":inventoryDetail[j].ShipFromAddress[0].postalOrZipCode
+								},
+							 "EstimatedFromDate":inventoryDetail[j].DeliveryEstimate[0].DeliveryWindow[0].From[0],
+							 "EstimatedToDate":inventoryDetail[j].DeliveryEstimate[0].DeliveryWindow[0].To[0]
+						 });
+						
+					}
+					console.log("inventoryAddressDetail2"+inventoryAddressDetail.length);
+					calculateTax(inventoryAddressDetail);
+				 }
+				}catch (error) {
+						console.log ("error"+JSON.stringify(error));
+						calculateTax(inventoryAddressDetail);
+						
+				  }
+				} else {
+					if (result) {
+							console.log("Result Error ");
+					}
+					calculateTax(inventoryAddressDetail);
+				 
+			    }
+							   
+			  });
+			});
+		  };
+		  var post_req = https.request(options, call);
+		  post_req.write(xmlDoc);
+		  post_req.end();
+		//console.log("inside tax1");
+  }
+	function calculateTax(shippingAddressDetail){
 		
-	});
-	response.on('end', function(){
-		 parseString(data, function (err, result) {
+	  var orderTaxData = {
+			'Items':{
+			  "OrderItem":[]
+			}
+
+		  };
+	  
+	  var taxclass="";
+	  var totalChargeablePrice = 0;
+	  var shippingChargeableItems = [];
+	  var shippingchargeableItemCost = 0;
+	  var shippingDiscountAmount = 0;
+	  var shippingDiscounts = requestBody.shippingDiscounts;
+	  console.log("shippingDiscounts"+shippingDiscounts);
+	if (shippingCode && items && items.length) {
+	  if(shippingDiscounts !== null && shippingDiscounts !== 'undefined'){
+		 shippingDiscountAmount =  shippingDiscounts[0].Impact;
+	  }
+	  _.each(items, function(itemData,index){
+		totalChargeablePrice += itemData.lineItemPrice;
+		shippingChargeableItems.push(itemData.productCode);
+		  shippingchargeableItemCost = shippingchargeableItemCost+ itemData.lineItemPrice;
+		 
+		 
+	  });
+	  var shippingChargeableItemCount = 1;
+	  _.each(items, function(itemData,index){
+		
+		var storefrontOrderAttributes = itemData.productProperties;
+		var prorateShippingAmount = 0;
+		var prorateShippingDiscountAmount = 0;
+		var discountAmount = 0;
+		  
+		 storefrontOrderAttributes.forEach(function(attr){
+					var attrVal=[];
+
+					if(attr.attributeFQN === 'tenant~taxclass'){
+						attrVal = JSON.parse(attr.values[0].stringValue);
+
+						for (var j = 0; j < attrVal.length; ++j) {
+						  var skuCode = attrVal[j].sku;
+						   console.log("skuCode"+skuCode);
+						  if(skuCode == itemData.variantProductCode){
+							taxclass = attrVal[j].value;
+							console.log("taxclass"+taxclass);
+						}
+					  }
+					  }
+			});
+		
+		obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem.push({
+		  $: {
+			'lineNumber':itemData.id
+			
+		  },
+		  "ItemId":"25-"+itemData.variantProductCode,
+		  "ItemDesc":"undefined",
+		  "ScreenSize":"0",
+		  "Origins":{
+			"AdminOrigin":{
+			  "Line1":"Stein Mart, Inc.", 
+			  "City":"King Of Prussia", 
+			  "MainDivision":"PA",
+			  "CountryCode":"US",
+			  "PostalCode":"19406" 
+			}
+			
+		  },
+		  "Quantity":itemData.quantity,
+		  "Pricing":{
+			"Merchandise":{
+			  "Amount":itemData.discountedTotal/itemData.quantity,
+			  "TaxClass":taxclass,
+			},
+			
+		  }
+			
+		  });
+		  var estimateFromDate="";
+		  var estimateToDate = "";
+		  var  originObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Origins;
+		  console.log("shippingAddressDetail length"+shippingAddressDetail.length);
+		  _.each(shippingAddressDetail, function(inventoryItem,index){
+			  if(inventoryItem.lineId == itemData.id){
+				  estimateFromDate = inventoryItem.EstimatedFromDate;
+				  estimateToDate = inventoryItem.EstimatedToDate;
+				  Object.assign(originObj,{
+					"ShippingOrigin":{
+						  "Line1":inventoryItem.ShippingOrigin.Line1,
+						  "City":inventoryItem.ShippingOrigin.City,
+						  "MainDivision":inventoryItem.ShippingOrigin.MainDivision,
+						  "CountryCode":inventoryItem.ShippingOrigin.CountryCode,
+						  "PostalCode":inventoryItem.ShippingOrigin.PostalCode
+					}
+					  
+				});  
+			  }
+			  
+		  });
+		
+		var  shippingOriginObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Origins.ShippingOrigin;
+		console.log("ShippingOrigin"+JSON.stringify(shippingOriginObj));
+		if(shippingOriginObj === undefined){
+		 Object.assign(originObj,{
+			"ShippingOrigin":{
+				  "Line1":requestBody.taxContext.originAddress.address1,
+				  "City":requestBody.taxContext.originAddress.cityOrTown,
+				  "MainDivision":requestBody.taxContext.originAddress.stateOrProvince,
+				  "CountryCode":requestBody.taxContext.originAddress.countryCode,
+				  "PostalCode":requestBody.taxContext.originAddress.postalOrZipCode
+				}
+		 }); 
+		}
+		if(requestBody.orderDiscount > 0){
+		discountAmount = (itemData.discountedTotal - itemData.lineItemPrice)/itemData.quantity;
+		var  merchandiseObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Merchandise ;
+
+		Object.assign(merchandiseObj,{
+		  "PromotionalDiscounts":{
+				"Discount":{
+				  $: {
+					'id':'ItemDisc_001',
+					"calculateDuty":"false"
+			
+				  },
+				  "Amount":discountAmount
+				}
+			  }
+		
+		});
+		  
+		}
+		var  merchandiseUnitPrice = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Merchandise;
+		var unitPrice = itemData.lineItemPrice/itemData.quantity;
+		Object.assign(merchandiseUnitPrice,{
+		  "UnitPrice":unitPrice
+		}); 
+		
+		if (shippingChargeableItems.includes(itemData.productCode)) {
+		
+		  prorateShippingAmount = getProrateShippingAmount(itemData.lineItemPrice,shippingchargeableItemCost,requestBody.shippingAmount);
+		  var  pricingObj =  obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing;
+		  Object.assign(pricingObj,{
+		  "Shipping":{
+			  "Amount":prorateShippingAmount,
+			  "TaxClass":"93000"
+			}
+		  }); 
+		  
+		  if(shippingDiscountAmount > 0 ){
+		  prorateShippingDiscountAmount = getProrateShippingAmount(itemData.lineItemPrice,shippingchargeableItemCost,shippingDiscountAmount);
+			
+		  var shippingObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Shipping;
+		  Object.assign(shippingObj,{
+		  "PromotionalDiscounts":{
+				"Discount":{
+				  $: {
+					'id':'ItemDisc_001',
+					"calculateDuty":"false"
+			
+				  },
+				  "Amount":prorateShippingDiscountAmount
+				}
+			  }
+		  }); 
+			
+			
+		  }
+		  ++shippingChargeableItemCount;
+		}else{
+		  var  pricingObj2 =  obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing;
+		  Object.assign(pricingObj2,{
+		  "Shipping":{
+			  "Amount":itemData.shippingAmount,
+			  "TaxClass":"93000"
+			}
+		  }); 
+		}
+		
+		orderTaxData.Items.OrderItem.push({
+		  "ItemId":itemData.id,
+		  "prorateShippingAmount":prorateShippingAmount,
+		  "prorateShippingDiscountAmount": prorateShippingDiscountAmount,
+		  "discountAmount" : discountAmount,
+		  "fromDate":estimateFromDate,
+		  "toDate":estimateToDate
+		}); 
+	  });
+
+	  
+	   builder = new xml2js.Builder();
+	   xmlDoc = builder.buildObject(obj);
+	   console.log(xmlDoc);
+	
+	   options = {
+			   method : 'POST',
+			   hostname: context.configuration.taxHostName,
+			   path: context.configuration.taxRadialUrl,         
+			   headers: {
+				'apiKey':context.configuration.taxRadialKey,
+				'Content-Type':'application/xml',
+				'Content-Length':xmlDoc.length,
+			   },
+			  
+			  
+			};
+	  
+	  data = '';
+	  call = function(response) {
+		response.on('data', function (chunk) {
+		  data += chunk;
+		  
+	  });
+		response.on('end', function(){
+		   parseString(data, function (err, result) {
 			
 			 var resultObj = JSON.stringify(result);
 			 console.log("resultObj"+resultObj);
 			 var transactionId = result.TaxDutyQuoteResponse.TaxTransactionId[0];
 			
-				if (result.TaxDutyQuoteResponse.TaxTransactionId[0] !== "" ) {
-                            try {
-                                var orderTax = 0;
-                                var shipTax = 0;
-								 console.log("transactionId"+transactionId);
-								 var orderItems = result.TaxDutyQuoteResponse.Shipping[0].ShipGroups[0].ShipGroup[0].Items[0].OrderItem;
-								 console.log("orderItems"+orderItems.length);
-                               
-									for (var i = 0; i < orderItems.length; ++i) {
-										var orderItem  = orderItems[i];
-										console.log("orderItemArray"+JSON.stringify(orderItem));
-										var  taxArray = orderItem.Pricing[0].Merchandise[0].TaxData[0].Taxes[0].Tax;
-										 console.log("taxArray"+taxArray.length);
-                               
-										var orderItemTax =0;
-										for (var j = 0; j < taxArray.length; ++j) {
-											
-										orderItemTax = orderItemTax + parseFloat(taxArray[j].CalculatedTax[0]);
-                                         console.log("orderItemTax"+orderItemTax);
-										}
-										orderTax = orderTax+orderItemTax;
-										
-                                    }
-                                
-                                orderTax = orderTax.toFixed(2);
-                                console.log('Order Tax:', orderTax);
-                                responseBody.orderTax = orderTax;
-                                context.response.body = responseBody;
-                                callback();
-                            } catch (error) {
-								console.log ("error"+JSON.stringify(error));
-                                callback();
-                            }
-                        } else {
-                            console.log("tax api response error: ", err);
-                            if (result) {
-                                console.log("Result Error: ", result.ErrorDetail);
-                            }
-                            callback();
-                        }
-				  
+			  if (result.TaxDutyQuoteResponse.TaxTransactionId[0] !== "" ) {
+				  try {
+					  var orderTax = 0;
+					  var shipTax = 0;
+					   console.log("transactionId"+transactionId);
+					   var orderItems = result.TaxDutyQuoteResponse.Shipping[0].ShipGroups[0].ShipGroup[0].Items[0].OrderItem;
+					   console.log("orderItems"+orderItems.length);
+						
+						for (var i = 0; i < orderItems.length; ++i) {
+						  var orderItem  = orderItems[i];
+						  console.log("orderItemArray"+JSON.stringify(orderItem));
+						  var  taxArray = orderItem.Pricing[0].Merchandise[0].TaxData[0].Taxes[0].Tax;
+						  var  taxShipArray = orderItem.Pricing[0].Shipping[0].TaxData[0].Taxes[0].Tax;
+						   console.log("taxArray"+taxArray.length);
+									 
+						  var orderItemTax =0;
+						  var gstTax = 0;
+						  for (var j = 0; j < taxArray.length; ++j) {
+							
+							orderItemTax = orderItemTax + parseFloat(taxArray[j].CalculatedTax[0]);
+							if(taxArray[j].Imposition[0].$.impositionType == 'General Sales and Use Tax'){
+							gstTax = gstTax + parseFloat(taxArray[j].CalculatedTax[0]);
+							}
+											   
+						  }
+						  
+						  for (j = 0; j < taxShipArray.length; ++j) {
+						   orderItemTax = orderItemTax + parseFloat(taxShipArray[j].CalculatedTax[0]);
+						   if(taxShipArray[j].Imposition[0].$.impositionType == 'General Sales and Use Tax'){
+							gstTax = gstTax + parseFloat(taxShipArray[j].CalculatedTax[0]);
+						   }
+											  
+						  }
+						  orderTax = orderTax+orderItemTax;
+						  gstTax = gstTax.toFixed(2);
+						  console.log('gstTax:', gstTax);
+						  getShipTaxData(orderItem, orderTaxData,taxArray,taxShipArray,gstTax);
+						  
+						}
+					  
+					  orderTax = orderTax.toFixed(2);
+					  console.log('Order Tax:', orderTax);
+					  responseBody.orderTax = orderTax;
+					  responseBody.taxData = orderTaxData;
+					  context.response.body = responseBody;
+					  
+					  var orderAttributeObject = [{
+						  "fullyQualifiedName": "tenant~tax-data-xml",
+						  "values": [JSON.stringify(orderTaxData)]
+					  }];
+					  console.log("orderAttributeObject : "+JSON.stringify(orderAttributeObject));
+					  var orderAttributeClient = OrderAttributeClient(context);
+					  orderAttributeClient.context['user-claims'] = null;
+					  orderAttributeClient.updateOrderAttributes({
+					  orderId: requestBody.orderId,
+						  removeMissing: false
+					  }, {
+						  body:orderAttributeObject
+						}).then(function() {
+							console.log("setting attribute data");
+							callback();
+						}, function(err) {
+							console.log('Error fetching order Attributes:', JSON.stringify(err));
+							callback();
+						});
+					  
+					} catch (error) {
+						console.log ("error"+JSON.stringify(error));
+						callback();
+					}
+					} else {
+						console.log("tax api response error: ", err);
+						if (result) {
+							console.log("Result Error: ", result.ErrorDetail);
+						}
+						callback();
+					}
+				
 			  
-		 }); 
-		
-                     
-    });
+		   }); 
+		  
+						   
+		  });
 
-};
-var post_req = https.request(options, call);
-post_req.write(xmlDoc);
-post_req.end();
-
-
-	
-/*if (shippingCode && requestBody.LineItems && requestBody.LineItems.length) {
-		console.log("calling order detail");
-		getOrderDetail(context, requestBody.OrderId, function (order) {
-            console.log("orderData1--"+JSON.stringify(order));
-			callback();
-		}); 
+		};
+		  post_req = https.request(options, call);
+		  post_req.write(xmlDoc);
+		  post_req.end();
+	 }
 	}
-
- 	
-  function getOrderDetail(context, checkoutNo, callback) {
-        
-        // get order factory object
-        var orderResource = createClientFromContext(orderResourceFactory, context, true);
-        orderResource.getOrder({ orderId: checkoutNo })
-            .then(function (checkoutData) {
-                //that.logData(context, 'getOrder-onSuccess' + JSON.stringify(checkoutData));
-				console.log("orderData1--"+JSON.stringify(checkoutData));
+	 //console.log("inside tax4");
+	  function getProrateShippingAmount(sellPrice,totalChargeablePrice,shipingTotal){
+		var shippingAmount = 0;
+		console.log("sellPrice"+sellPrice);
+		console.log("totalChargeablePrice"+totalChargeablePrice);
+		console.log("shipingTotal"+shipingTotal);
+		shippingAmount = (sellPrice * shipingTotal)/ totalChargeablePrice; 
+		console.log("shippingAmount"+shippingAmount);
+		return shippingAmount.toFixed(2) ;
+		   
+	  }
+	  function getShipTaxData(orderItem, orderTaxData,taxArray,taxShipArray,gstTax){
+		
+		var taxObj = {
+		'TaxGroup': {
+		  $: {
+			'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
 			
-                callback();
-            }, function (err1) {
-                that.logData(context, 'getOrder-onError' + JSON.stringify(err1));
-                callback();
-            });
-    }
+		   },
+		  
+		   "Tax":taxArray
+			  
+		  }
+		};
+		
+		var taxShipObj = {
+		'TaxGroup': {
+		  $: {
+			'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
+			
+		   },
+		  
+		   "Tax":taxShipArray
+			  
+		  }
+		};
+		
+	  var taxBuilder = new xml2js.Builder();
+	  var taxDataXml = taxBuilder.buildObject(taxObj);
+	  var taxShipDataXml =	taxBuilder.buildObject(taxShipObj);
+	  var itemCode = orderItem.$.lineNumber;
+	  var taxId = itemCode+"_tax_data_xml";
+	  console.log("itemCode"+itemCode);
+	  var orderItems = orderTaxData.Items.OrderItem;
+	  for (var i = 0; i < orderItems.length; ++i) {
+		var taxOrderItemCode = orderItems[i].ItemId;
+		var taxOrderItem = orderItems[i];
+		if(itemCode == taxOrderItemCode){
+		  Object.assign(taxOrderItem,{
+		  "tax_data_xml":taxDataXml,
+		  "tax_ship_data_xml":taxShipDataXml,
+		  "gstTax":gstTax
+		  }); 
+		}
+		
+	  }
+	}
+ 
 	
- function createClientFromContext(client, context, removeClaims) {
-        var c = client(context);
-        if (removeClaims)
-            c.context[mozuConstants.headers.USERCLAIMS] = null;
-        return c;
-    }*/	
-   
+  };
+},{"https":undefined,"mozu-node-sdk/clients/commerce/orders/orderAttribute":6,"underscore":35,"xml2js":44}],3:[function(require,module,exports){
+  /**
+   * Implementation for http.commerce.catalog.storefront.tax.estimateTaxes.after
+
+
+   * HTTP Actions all receive a similar context object that includes
+   * `request` and `response` objects. These objects are similar to
+   * http.IncomingMessage objects in NodeJS.
+
+  {
+    configuration: {},
+    request: http.ClientRequest,
+    response: http.ClientResponse
+  }
+
+   * Call `response.end()` to end the response early.
+   * Call `response.set(headerName)` to set an HTTP header for the response.
+   * `request.headers` is an object containing the HTTP headers for the request.
+   * 
+   * The `request` and `response` objects are both Streams and you can read
+   * data out of them the way that you would in Node.
+
+   */
+  var xml2js = require('xml2js');
+  var parseString = require('xml2js').parseString;
+  var _  = require('underscore');
+  var https = require("https");
+  var apiContext = require('mozu-node-sdk/clients/platform/application')();
+  var orderResourceClient = require("mozu-node-sdk/clients/commerce/orders/orderAttribute")(apiContext);
+  module.exports = function(context, callback) {
+  //var orderResource = require('mozu-node-sdk/clients/commerce/order')(context);
   
-};
-},{"https":undefined,"mozu-node-sdk/clients/commerce/checkout":5,"mozu-node-sdk/clients/commerce/order":6,"mozu-node-sdk/constants":8,"underscore":34,"xml2js":43}],3:[function(require,module,exports){
+  var requestBody = context.request.body; 
+  var responseBody = context.response.body;
+  var items=requestBody.lineItems;
+ 
+  //orderResource.context['user-claims'] = null;
+
+ //console.log("responseBody"+JSON.stringify(context.response.body));
+ console.log("requestBody"+JSON.stringify(requestBody));
+  
+ /*if(requestBody.taxContext.destinationAddress !== ""){
+
+  var estimateDateObj = {
+    'InventoryDetailsRequestMessage': {
+      $: {
+        'xmlns': 'http://api.gsicommerce.com/schema/checkout/1.0',
+		 
+      
+     },
+	
+    'OrderItem':[]
+    
+    }
+  };
+  
+  var inventoryAddressDetail = {
+	  'CartItems':[]
+  };
+
+	var shippingCode = requestBody.shippingMethodCode;
+	var	ShippingMethodName = requestBody.shippingMethodName;
+	
+		
+	_.each(items, function(itemData,index){
+		estimateDateObj.InventoryDetailsRequestMessage.OrderItem.push({
+			  $: {
+				 lineId:itemData.id ,
+				 itemId:"25-"+itemData.variantProductCode
+				
+			  },
+			  "Quantity":itemData.quantity,
+			  "ShipmentDetails":{
+				"ShippingMethod":ShippingMethodName,
+				"ShipToAddress":{
+					"Line1":requestBody.taxContext.destinationAddress.address1,
+					"City":requestBody.taxContext.destinationAddress.cityOrTown,
+					"MainDivision":requestBody.taxContext.destinationAddress.stateOrProvince,
+					"CountryCode":requestBody.taxContext.destinationAddress.countryCode,
+					"PostalCode":requestBody.taxContext.destinationAddress.postalOrZipCode
+				 }
+				}
+			  
+		    });
+		 });
+
+		  var builder = new xml2js.Builder();
+		  var xmlDoc = builder.buildObject(estimateDateObj);
+		  console.log(xmlDoc);
+		  var options = {
+				   method : 'POST',
+				   hostname: 'api-na.gsipartners.com',
+				   path: '/v1.0/stores/SMTUS/inventory/details/get.xml',         
+				   headers: {
+					'apiKey':'7WqVhbJiWWCJEAY6G7O795Bb8YMKThYJ',
+					'Content-Type':'application/xml',
+					'Content-Length':xmlDoc.length,
+				   },
+				  
+				  
+				};
+		  var data = '';
+
+		  call = function(response) {
+			
+			response.on('data', function (chunk) {
+			  data += chunk;
+			  
+		  });
+			response.on('end', function(){
+			   parseString(data, function (err, result) {
+				
+					var resultObj = JSON.stringify(result);
+					console.log("resultObj"+resultObj);
+					var inventoryDetails = result.InventoryDetailsResponseMessage.InventoryDetails;
+					console.log("orderItems"+inventoryDetails.length);
+				   if (result.InventoryDetailsResponseMessage.InventoryDetails !== "" ) {
+					
+					  for (var i = 0; i < inventoryDetails.length; i++) {
+						var inventoryDetail = inventoryDetails[i].InventoryDetail;
+						console.log("inventoryDetails length"+i+inventoryDetail.length);
+						 for (var j = 0; j < inventoryDetail.length; ++j) {
+							 console.log("inventoryDetail"+inventoryDetail[j].$.lineId);
+							 console.log("inventoryDetail"+inventoryDetail[j].ShipFromAddress[0].Line1);
+							 inventoryAddressDetail.CartItems.push({
+								 "lineId":inventoryDetail[j].$.lineId,
+								 "ShippingOrigin":{
+									  "Line1":inventoryDetail[j].ShipFromAddress[0].Line1,
+									  "City":inventoryDetail[j].ShipFromAddress[0].City,
+									  "MainDivision":inventoryDetail[j].ShipFromAddress[0].MainDivision,
+									  "CountryCode":inventoryDetail[j].ShipFromAddress[0].CountryCode,
+									  "PostalCode":inventoryDetail[j].ShipFromAddress[0].postalOrZipCode
+									},
+								 "EstimatedFromDate":inventoryDetail[j].DeliveryEstimate[0].DeliveryWindow[0].From[0],
+								 "EstimatedToDate":inventoryDetail[j].DeliveryEstimate[0].DeliveryWindow[0].To[0]
+							 });
+							
+						}
+						console.log("inventoryAddressDetail2"+JSON.stringify(inventoryAddressDetail));
+						//calculateTax(inventoryAddressDetail);
+					 }
+					  var adressObj = JSON.stringify(inventoryAddressDetail);
+					  var orderAttributeObject = [{
+							  "fullyQualifiedName": "tenant~tax-data-xml",
+							  "values": ['manu']
+						  }];
+						  
+						
+						  //orderResourceClient.context['user-claims'] = null;
+						  orderResourceClient.updateOrderAttributes({
+						  orderId: requestBody.orderId,
+							  removeMissing: false
+						  },{
+							  body:orderAttributeObject
+							}).then(function(updated) {
+								console.log("setting attribute data");
+								callback();
+							}, function(err) {
+								console.log('Error fetching order Attributes:', JSON.stringify(err));
+								callback();
+							});
+						console.log("orderAttributeObject23"+JSON.stringify(orderAttributeObject));
+						
+					} else {
+						if (result) {
+								console.log("Result Error ");
+						}
+					 //calculateTax(inventoryAddressDetail);
+					 
+					}
+							   
+			  });
+			});
+		  };
+		  var post_req = https.request(options, call);
+		  post_req.write(xmlDoc);
+		  post_req.end();
+		//console.log("inside tax1");
+   }*/
+   callback();
+  
+  };
+},{"https":undefined,"mozu-node-sdk/clients/commerce/orders/orderAttribute":6,"mozu-node-sdk/clients/platform/application":7,"underscore":35,"xml2js":44}],4:[function(require,module,exports){
 module.exports={
   "Production/Sandbox": {
     "homeDomain": "https://home.mozu.com",
@@ -409,7 +819,7 @@ module.exports={
   }
 }
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 'use strict';
 
 var extend = require('./utils/tiny-extend'),
@@ -491,7 +901,36 @@ extend(Client, {
 });
 
 module.exports = Client;
-},{"./constants":8,"./plugins/expand-uritemplate-from-context":9,"./plugins/in-memory-auth-cache":10,"./plugins/server-side-prerequisites":16,"./utils/get-config":20,"./utils/make-method":22,"./utils/normalize-context":23,"./utils/sub":27,"./utils/tiny-extend":29}],5:[function(require,module,exports){
+},{"./constants":9,"./plugins/expand-uritemplate-from-context":10,"./plugins/in-memory-auth-cache":11,"./plugins/server-side-prerequisites":17,"./utils/get-config":21,"./utils/make-method":23,"./utils/normalize-context":24,"./utils/sub":28,"./utils/tiny-extend":30}],6:[function(require,module,exports){
+
+
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by CodeZu.     
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+var Client = require('../../../client'), constants = Client.constants;
+
+module.exports = Client.sub({
+	getOrderAttributes: Client.method({
+		method: constants.verbs.GET,
+		url: '{+tenantPod}api/commerce/orders/{orderId}/attributes'
+	}),
+	createOrderAttributes: Client.method({
+		method: constants.verbs.POST,
+		url: '{+tenantPod}api/commerce/orders/{orderId}/attributes'
+	}),
+	updateOrderAttributes: Client.method({
+		method: constants.verbs.PUT,
+		url: '{+tenantPod}api/commerce/orders/{orderId}/attributes?removeMissing={removeMissing}'
+	})
+});
+
+},{"../../../client":5}],7:[function(require,module,exports){
 
 
 //------------------------------------------------------------------------------
@@ -506,130 +945,37 @@ module.exports = Client;
 var Client = require('../../client'), constants = Client.constants;
 
 module.exports = Client.sub({
-	getCheckouts: Client.method({
+	getAppPackageNames: Client.method({
 		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/checkouts/?startIndex={startIndex}&pageSize={pageSize}&sortBy={sortBy}&filter={filter}&q={q}&qLimit={qLimit}&responseFields={responseFields}'
+		url: '{+homePod}api/platform/developer/applications/{applicationKey}/packagenames?responseFields={responseFields}'
 	}),
-	getAvailableActions: Client.method({
+	getAppVersions: Client.method({
 		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/actions'
+		url: '{+homePod}api/platform/developer/applications/versions/{nsAndAppId}?responseFields={responseFields}'
 	}),
-	getAvailableShippingMethods: Client.method({
+	getPackageFileMetadata: Client.method({
 		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/shippingMethods'
+		url: '{+homePod}api/platform/developer/packages/{applicationKey}/filemetadata/{filepath}?responseFields={responseFields}'
 	}),
-	getCheckout: Client.method({
+	getPackageMetadata: Client.method({
 		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}?responseFields={responseFields}'
+		url: '{+homePod}api/platform/developer/packages/{applicationKey}/metadata?responseFields={responseFields}'
 	}),
-	createCheckoutFromCart: Client.method({
+	upsertPackageFile: Client.method({
 		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/checkouts/?cartId={cartId}&responseFields={responseFields}'
+		url: '{+homePod}api/platform/developer/packages/{applicationKey}/files/{filepath}?lastModifiedTime={lastModifiedTime}&responseFields={responseFields}'
 	}),
-	performCheckoutAction: Client.method({
+	renamePackageFile: Client.method({
 		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/actions?responseFields={responseFields}'
+		url: '{+homePod}api/platform/developer/packages/{applicationKey}/files_rename?responseFields={responseFields}'
 	}),
-	resendCheckoutConfirmationEmail: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/email/resend'
-	}),
-	setShippingMethods: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/shippingMethods?responseFields={responseFields}'
-	}),
-	updateCheckout: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}?responseFields={responseFields}'
-	}),
-	processDigitalWallet: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/digitalWallet/{digitalWalletType}?responseFields={responseFields}'
-	}),
-	changeCheckoutPriceList: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/checkouts/{checkoutId}/priceList?responseFields={responseFields}'
+	deletePackageFile: Client.method({
+		method: constants.verbs.DELETE,
+		url: '{+homePod}api/platform/developer/packages/{applicationKey}/files/{filepath}'
 	})
 });
 
-},{"../../client":4}],6:[function(require,module,exports){
-
-
-//------------------------------------------------------------------------------
-// <auto-generated>
-//     This code was generated by CodeZu.     
-//
-//     Changes to this file may cause incorrect behavior and will be lost if
-//     the code is regenerated.
-// </auto-generated>
-//------------------------------------------------------------------------------
-
-var Client = require('../../client'), constants = Client.constants;
-
-module.exports = Client.sub({
-	getOrders: Client.method({
-		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/orders/?startIndex={startIndex}&pageSize={pageSize}&sortBy={sortBy}&filter={filter}&q={q}&qLimit={qLimit}&includeBin={includeBin}&responseFields={responseFields}'
-	}),
-	getAvailableActions: Client.method({
-		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/actions'
-	}),
-	getTaxableOrders: Client.method({
-		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/taxableorders'
-	}),
-	getOrder: Client.method({
-		method: constants.verbs.GET,
-		url: '{+tenantPod}api/commerce/orders/{orderId}?draft={draft}&includeBin={includeBin}&responseFields={responseFields}'
-	}),
-	createOrderFromCart: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/orders/?cartId={cartId}&responseFields={responseFields}'
-	}),
-	createOrder: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/orders/?responseFields={responseFields}'
-	}),
-	performOrderAction: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/actions?responseFields={responseFields}'
-	}),
-	priceOrder: Client.method({
-		method: constants.verbs.POST,
-		url: '{+tenantPod}api/commerce/orders/price?refreshShipping={refreshShipping}&responseFields={responseFields}'
-	}),
-	processDigitalWallet: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/digitalWallet/{digitalWalletType}?responseFields={responseFields}'
-	}),
-	updateOrderDiscount: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/discounts/{discountId}?updatemode={updateMode}&version={version}&responseFields={responseFields}'
-	}),
-	deleteOrderDraft: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/draft?version={version}'
-	}),
-	resendOrderConfirmationEmail: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/email/resend'
-	}),
-	changeOrderPriceList: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/priceList?updatemode={updateMode}&version={version}&responseFields={responseFields}'
-	}),
-	changeOrderUserId: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}/users?responseFields={responseFields}'
-	}),
-	updateOrder: Client.method({
-		method: constants.verbs.PUT,
-		url: '{+tenantPod}api/commerce/orders/{orderId}?updatemode={updateMode}&version={version}&responseFields={responseFields}'
-	})
-});
-
-},{"../../client":4}],7:[function(require,module,exports){
+},{"../../client":5}],8:[function(require,module,exports){
 
 
 //------------------------------------------------------------------------------
@@ -650,7 +996,7 @@ module.exports = Client.sub({
 	})
 });
 
-},{"../../client":4}],8:[function(require,module,exports){
+},{"../../client":5}],9:[function(require,module,exports){
 'use strict';
 
 var version = require('./version'),
@@ -714,7 +1060,7 @@ module.exports = {
   capabilityTimeoutInSeconds: 180,
   version: version.current
 };
-},{"./version":31}],9:[function(require,module,exports){
+},{"./version":32}],10:[function(require,module,exports){
 'use strict';
 
 var getUrlTemplate = require('../utils/get-url-template');
@@ -761,7 +1107,7 @@ module.exports = function () {
     return template.render(fullTptEvalCtx);
   };
 };
-},{"../utils/get-url-template":21,"../utils/tiny-extend":29}],10:[function(require,module,exports){
+},{"../utils/get-url-template":22,"../utils/tiny-extend":30}],11:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -818,7 +1164,7 @@ module.exports = function InMemoryAuthCache() {
     constructor: InMemoryAuthCache
   };
 };
-},{"assert":undefined}],11:[function(require,module,exports){
+},{"assert":undefined}],12:[function(require,module,exports){
 'use strict';
 
 var AuthProvider = require('../../security/auth-provider');
@@ -844,7 +1190,7 @@ module.exports = function (state) {
     return state;
   }
 };
-},{"../../constants":8,"../../security/auth-provider":17,"./get-scope-from-state":15}],12:[function(require,module,exports){
+},{"../../constants":9,"../../security/auth-provider":18,"./get-scope-from-state":16}],13:[function(require,module,exports){
 'use strict';
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -897,7 +1243,7 @@ module.exports = function (state) {
     return state;
   }
 };
-},{"../../utils/get-url-template":21,"../../utils/tenant-cache":28,"./get-scope-from-state":15,"mozu-metadata/data/environments.json":3}],13:[function(require,module,exports){
+},{"../../utils/get-url-template":22,"../../utils/tenant-cache":29,"./get-scope-from-state":16,"mozu-metadata/data/environments.json":4}],14:[function(require,module,exports){
 'use strict';
 
 var TenantCache = require('../../utils/tenant-cache');
@@ -929,7 +1275,7 @@ module.exports = function (state) {
     return state;
   }
 };
-},{"../../utils/get-url-template":21,"../../utils/tenant-cache":28,"./get-scope-from-state":15}],14:[function(require,module,exports){
+},{"../../utils/get-url-template":22,"../../utils/tenant-cache":29,"./get-scope-from-state":16}],15:[function(require,module,exports){
 'use strict';
 
 var AuthProvider = require('../../security/auth-provider');
@@ -962,7 +1308,7 @@ module.exports = function (state) {
     return state;
   }
 };
-},{"../../constants":8,"../../security/auth-provider":17,"./get-scope-from-state":15}],15:[function(require,module,exports){
+},{"../../constants":9,"../../security/auth-provider":18,"./get-scope-from-state":16}],16:[function(require,module,exports){
 'use strict';
 
 var scopes = require('../../constants').scopes;
@@ -986,7 +1332,7 @@ module.exports = function (state) {
     return requestConfig.scope;
   }
 };
-},{"../../constants":8}],16:[function(require,module,exports){
+},{"../../constants":9}],17:[function(require,module,exports){
 'use strict';
 /**
  * Sensible default configuration for a NodeJS, ArcJS, or other server env.
@@ -997,7 +1343,7 @@ module.exports = function (state) {
 module.exports = function () {
   return [require('./ensure-tenant-pod-url'), require('./ensure-pci-pod-url'), require('./ensure-user-claims'), require('./ensure-app-claims')];
 };
-},{"./ensure-app-claims":11,"./ensure-pci-pod-url":12,"./ensure-tenant-pod-url":13,"./ensure-user-claims":14}],17:[function(require,module,exports){
+},{"./ensure-app-claims":12,"./ensure-pci-pod-url":13,"./ensure-tenant-pod-url":14,"./ensure-user-claims":15}],18:[function(require,module,exports){
 /* eslint handle-callback-err: 0 */
 /* global Promise */
 'use strict';
@@ -1123,7 +1469,7 @@ var AuthProvider = {
 };
 
 module.exports = AuthProvider;
-},{"../constants":8,"../utils/tenant-cache":28,"./auth-ticket":18}],18:[function(require,module,exports){
+},{"../constants":9,"../utils/tenant-cache":29,"./auth-ticket":19}],19:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1146,7 +1492,7 @@ function AuthTicket(json) {
 }
 
 module.exports = AuthTicket;
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -1211,7 +1557,7 @@ function ensureString(something) {
 function ensureMessage(res) {
   return res.message || res.body && res.body.message;
 }
-},{"./tiny-extend":29,"util":undefined}],20:[function(require,module,exports){
+},{"./tiny-extend":30,"util":undefined}],21:[function(require,module,exports){
 'use strict';
 // BEGIN INIT
 
@@ -1249,7 +1595,7 @@ module.exports = function getConfig() {
   }
   return conf;
 };
-},{"./tiny-findup":30,"fs":undefined}],21:[function(require,module,exports){
+},{"./tiny-findup":31,"fs":undefined}],22:[function(require,module,exports){
 'use strict';
 /**
  * Memoized function to turn URI Template text strings into Template objects.
@@ -1285,7 +1631,7 @@ module.exports = function (templateText) {
     keysUsed: findKeys(templateText)
   };
 };
-},{"uri-template":35}],22:[function(require,module,exports){
+},{"uri-template":36}],23:[function(require,module,exports){
 'use strict';
 
 var extend = require('./tiny-extend');
@@ -1353,7 +1699,7 @@ module.exports = function (config) {
     }
   };
 };
-},{"./request":25,"./tiny-extend":29}],23:[function(require,module,exports){
+},{"./request":26,"./tiny-extend":30}],24:[function(require,module,exports){
 'use strict';
 
 var extend = require('./tiny-extend');
@@ -1382,14 +1728,14 @@ module.exports = function (context) {
     }, ctx);
   }, newContext);
 };
-},{"./tiny-extend":29}],24:[function(require,module,exports){
+},{"./tiny-extend":30}],25:[function(require,module,exports){
 'use strict';
 
 var reISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*))(?:Z|(\+|-)([\d|:]*))?$/;
 module.exports = function parseDate(key, value) {
   return typeof value === 'string' && reISO.exec(value) ? new Date(value) : value;
 };
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 'use strict';
 /* global Promise */
 
@@ -1508,7 +1854,7 @@ module.exports = function (options, transform) {
     request.end();
   });
 };
-},{"../constants":8,"./errorify":19,"./parse-json-dates":24,"./stream-to-callback":26,"./tiny-extend":29,"http":undefined,"https":undefined,"url":undefined}],26:[function(require,module,exports){
+},{"../constants":9,"./errorify":20,"./parse-json-dates":25,"./stream-to-callback":27,"./tiny-extend":30,"http":undefined,"https":undefined,"url":undefined}],27:[function(require,module,exports){
 'use strict';
 
 var Stream = require('stream').Transform;
@@ -1524,7 +1870,7 @@ module.exports = function streamToCallback(stream, cb) {
     cb(null, buf.read());
   });
 };
-},{"stream":undefined}],27:[function(require,module,exports){
+},{"stream":undefined}],28:[function(require,module,exports){
 'use strict';
 
 var util = require('util'),
@@ -1544,7 +1890,7 @@ module.exports = function sub(cons, proto) {
     if (proto) extend(child.prototype, proto);
     return child;
 };
-},{"./tiny-extend":29,"util":undefined}],28:[function(require,module,exports){
+},{"./tiny-extend":30,"util":undefined}],29:[function(require,module,exports){
 'use strict';
 
 var TenantClient = void 0;
@@ -1571,7 +1917,7 @@ module.exports = {
     }
   }
 };
-},{"../clients/platform/tenant":7}],29:[function(require,module,exports){
+},{"../clients/platform/tenant":8}],30:[function(require,module,exports){
 'use strict';
 
 module.exports = function extend(target) {
@@ -1584,7 +1930,7 @@ module.exports = function extend(target) {
     return out;
   }, target);
 };
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 'use strict';
 
 var path = require('path');
@@ -1602,13 +1948,13 @@ module.exports = function findup(filename) {
   }
   return exists && maybeFile;
 };
-},{"fs":undefined,"path":undefined}],31:[function(require,module,exports){
+},{"fs":undefined,"path":undefined}],32:[function(require,module,exports){
 'use strict';
 
 module.exports = {
   current: "1.1705.17038.0"
 };
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 module.exports = function pctEncode(regexp) {
   regexp = regexp || /\W/g;
   return function encode(string) {
@@ -1633,7 +1979,7 @@ module.exports = function pctEncode(regexp) {
   }
 }
 
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 ;(function (sax) { // wrapper for non-node envs
   sax.parser = function (strict, opt) { return new SAXParser(strict, opt) }
   sax.SAXParser = SAXParser
@@ -3200,7 +3546,7 @@ module.exports = function pctEncode(regexp) {
   }
 })(typeof exports === 'undefined' ? this.sax = {} : exports)
 
-},{"stream":undefined,"string_decoder":undefined}],34:[function(require,module,exports){
+},{"stream":undefined,"string_decoder":undefined}],35:[function(require,module,exports){
 //     Underscore.js 1.9.2
 //     https://underscorejs.org
 //     (c) 2009-2018 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -4894,7 +5240,7 @@ module.exports = function pctEncode(regexp) {
   }
 }());
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 module.exports = (function(){
   /*
    * Generated by PEG.js 0.7.0.
@@ -5621,7 +5967,7 @@ module.exports = (function(){
   return result;
 })();
 
-},{"./lib/classes":36}],36:[function(require,module,exports){
+},{"./lib/classes":37}],37:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var FormContinuationExpression, FormStartExpression, FragmentExpression, LabelExpression, NamedExpression, PathParamExpression, PathSegmentExpression, ReservedExpression, SimpleExpression, Template, encoders, _ref, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7,
@@ -6040,7 +6386,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./encoders":37}],37:[function(require,module,exports){
+},{"./encoders":38}],38:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var pctEncode;
@@ -6053,7 +6399,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"pct-encode":32}],38:[function(require,module,exports){
+},{"pct-encode":33}],39:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -6067,7 +6413,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -6196,7 +6542,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./defaults":40,"xmlbuilder":76}],40:[function(require,module,exports){
+},{"./defaults":41,"xmlbuilder":77}],41:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   exports.defaults = {
@@ -6270,7 +6616,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -6653,7 +6999,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./bom":38,"./defaults":40,"./processors":42,"events":undefined,"sax":33,"timers":undefined}],42:[function(require,module,exports){
+},{"./bom":39,"./defaults":41,"./processors":43,"events":undefined,"sax":34,"timers":undefined}],43:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -6689,7 +7035,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],43:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -6730,7 +7076,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./builder":39,"./defaults":40,"./parser":41,"./processors":42}],44:[function(require,module,exports){
+},{"./builder":40,"./defaults":41,"./parser":42,"./processors":43}],45:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -6744,7 +7090,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],45:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -6769,7 +7115,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],46:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var assign, getValue, isArray, isEmpty, isFunction, isObject, isPlainObject,
@@ -6854,7 +7200,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -6866,7 +7212,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],48:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLAttribute, XMLNode;
@@ -6976,7 +7322,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],49:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],50:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCData, XMLCharacterData,
@@ -7014,7 +7360,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLCharacterData":50}],50:[function(require,module,exports){
+},{"./NodeType":46,"./XMLCharacterData":51}],51:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLCharacterData, XMLNode,
@@ -7095,7 +7441,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./XMLNode":67}],51:[function(require,module,exports){
+},{"./XMLNode":68}],52:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLComment,
@@ -7133,7 +7479,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLCharacterData":50}],52:[function(require,module,exports){
+},{"./NodeType":46,"./XMLCharacterData":51}],53:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMConfiguration, XMLDOMErrorHandler, XMLDOMStringList;
@@ -7199,7 +7545,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./XMLDOMErrorHandler":53,"./XMLDOMStringList":55}],53:[function(require,module,exports){
+},{"./XMLDOMErrorHandler":54,"./XMLDOMStringList":56}],54:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMErrorHandler;
@@ -7217,7 +7563,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],54:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMImplementation;
@@ -7251,7 +7597,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],55:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMStringList;
@@ -7281,7 +7627,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],56:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDAttList, XMLNode,
@@ -7338,7 +7684,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],57:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],58:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDElement, XMLNode,
@@ -7378,7 +7724,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],58:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],59:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDEntity, XMLNode, isObject,
@@ -7477,7 +7823,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./XMLNode":67}],59:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./XMLNode":68}],60:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDNotation, XMLNode,
@@ -7531,7 +7877,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],60:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],61:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDeclaration, XMLNode, isObject,
@@ -7576,7 +7922,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./XMLNode":67}],61:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./XMLNode":68}],62:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDocType, XMLNamedNodeMap, XMLNode, isObject,
@@ -7764,7 +8110,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./XMLDTDAttList":56,"./XMLDTDElement":57,"./XMLDTDEntity":58,"./XMLDTDNotation":59,"./XMLNamedNodeMap":66,"./XMLNode":67}],62:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./XMLDTDAttList":57,"./XMLDTDElement":58,"./XMLDTDEntity":59,"./XMLDTDNotation":60,"./XMLNamedNodeMap":67,"./XMLNode":68}],63:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDOMConfiguration, XMLDOMImplementation, XMLDocument, XMLNode, XMLStringWriter, XMLStringifier, isPlainObject,
@@ -8008,7 +8354,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./XMLDOMConfiguration":52,"./XMLDOMImplementation":54,"./XMLNode":67,"./XMLStringWriter":72,"./XMLStringifier":73}],63:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./XMLDOMConfiguration":53,"./XMLDOMImplementation":55,"./XMLNode":68,"./XMLStringWriter":73,"./XMLStringifier":74}],64:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLAttribute, XMLCData, XMLComment, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDeclaration, XMLDocType, XMLDocument, XMLDocumentCB, XMLElement, XMLProcessingInstruction, XMLRaw, XMLStringWriter, XMLStringifier, XMLText, getValue, isFunction, isObject, isPlainObject, ref,
@@ -8538,7 +8884,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./WriterState":47,"./XMLAttribute":48,"./XMLCData":49,"./XMLComment":51,"./XMLDTDAttList":56,"./XMLDTDElement":57,"./XMLDTDEntity":58,"./XMLDTDNotation":59,"./XMLDeclaration":60,"./XMLDocType":61,"./XMLDocument":62,"./XMLElement":65,"./XMLProcessingInstruction":69,"./XMLRaw":70,"./XMLStringWriter":72,"./XMLStringifier":73,"./XMLText":74}],64:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./WriterState":48,"./XMLAttribute":49,"./XMLCData":50,"./XMLComment":52,"./XMLDTDAttList":57,"./XMLDTDElement":58,"./XMLDTDEntity":59,"./XMLDTDNotation":60,"./XMLDeclaration":61,"./XMLDocType":62,"./XMLDocument":63,"./XMLElement":66,"./XMLProcessingInstruction":70,"./XMLRaw":71,"./XMLStringWriter":73,"./XMLStringifier":74,"./XMLText":75}],65:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDummy, XMLNode,
@@ -8571,7 +8917,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],65:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],66:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLAttribute, XMLElement, XMLNamedNodeMap, XMLNode, getValue, isFunction, isObject, ref,
@@ -8871,7 +9217,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./XMLAttribute":48,"./XMLNamedNodeMap":66,"./XMLNode":67}],66:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./XMLAttribute":49,"./XMLNamedNodeMap":67,"./XMLNode":68}],67:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLNamedNodeMap;
@@ -8931,7 +9277,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],67:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var DocumentPosition, NodeType, XMLCData, XMLComment, XMLDeclaration, XMLDocType, XMLDummy, XMLElement, XMLNamedNodeMap, XMLNode, XMLNodeList, XMLProcessingInstruction, XMLRaw, XMLText, getValue, isEmpty, isFunction, isObject, ref1,
@@ -9718,7 +10064,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./DocumentPosition":44,"./NodeType":45,"./Utility":46,"./XMLCData":49,"./XMLComment":51,"./XMLDeclaration":60,"./XMLDocType":61,"./XMLDummy":64,"./XMLElement":65,"./XMLNamedNodeMap":66,"./XMLNodeList":68,"./XMLProcessingInstruction":69,"./XMLRaw":70,"./XMLText":74}],68:[function(require,module,exports){
+},{"./DocumentPosition":45,"./NodeType":46,"./Utility":47,"./XMLCData":50,"./XMLComment":52,"./XMLDeclaration":61,"./XMLDocType":62,"./XMLDummy":65,"./XMLElement":66,"./XMLNamedNodeMap":67,"./XMLNodeList":69,"./XMLProcessingInstruction":70,"./XMLRaw":71,"./XMLText":75}],69:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLNodeList;
@@ -9748,7 +10094,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],69:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLProcessingInstruction,
@@ -9799,7 +10145,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLCharacterData":50}],70:[function(require,module,exports){
+},{"./NodeType":46,"./XMLCharacterData":51}],71:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLNode, XMLRaw,
@@ -9836,7 +10182,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLNode":67}],71:[function(require,module,exports){
+},{"./NodeType":46,"./XMLNode":68}],72:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLStreamWriter, XMLWriterBase,
@@ -10014,7 +10360,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./WriterState":47,"./XMLWriterBase":75}],72:[function(require,module,exports){
+},{"./NodeType":46,"./WriterState":48,"./XMLWriterBase":76}],73:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLStringWriter, XMLWriterBase,
@@ -10051,7 +10397,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./XMLWriterBase":75}],73:[function(require,module,exports){
+},{"./XMLWriterBase":76}],74:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLStringifier,
@@ -10293,7 +10639,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{}],74:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLText,
@@ -10364,7 +10710,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./XMLCharacterData":50}],75:[function(require,module,exports){
+},{"./NodeType":46,"./XMLCharacterData":51}],76:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLCData, XMLComment, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDeclaration, XMLDocType, XMLDummy, XMLElement, XMLProcessingInstruction, XMLRaw, XMLText, XMLWriterBase, assign,
@@ -10794,7 +11140,7 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./WriterState":47,"./XMLCData":49,"./XMLComment":51,"./XMLDTDAttList":56,"./XMLDTDElement":57,"./XMLDTDEntity":58,"./XMLDTDNotation":59,"./XMLDeclaration":60,"./XMLDocType":61,"./XMLDummy":64,"./XMLElement":65,"./XMLProcessingInstruction":69,"./XMLRaw":70,"./XMLText":74}],76:[function(require,module,exports){
+},{"./NodeType":46,"./Utility":47,"./WriterState":48,"./XMLCData":50,"./XMLComment":52,"./XMLDTDAttList":57,"./XMLDTDElement":58,"./XMLDTDEntity":59,"./XMLDTDNotation":60,"./XMLDeclaration":61,"./XMLDocType":62,"./XMLDummy":65,"./XMLElement":66,"./XMLProcessingInstruction":70,"./XMLRaw":71,"./XMLText":75}],77:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLDOMImplementation, XMLDocument, XMLDocumentCB, XMLStreamWriter, XMLStringWriter, assign, isFunction, ref;
@@ -10861,5 +11207,5 @@ module.exports = (function(){
 
 }).call(this);
 
-},{"./NodeType":45,"./Utility":46,"./WriterState":47,"./XMLDOMImplementation":54,"./XMLDocument":62,"./XMLDocumentCB":63,"./XMLStreamWriter":71,"./XMLStringWriter":72}]},{},[1])(1)
+},{"./NodeType":46,"./Utility":47,"./WriterState":48,"./XMLDOMImplementation":55,"./XMLDocument":63,"./XMLDocumentCB":64,"./XMLStreamWriter":72,"./XMLStringWriter":73}]},{},[1])(1)
 });

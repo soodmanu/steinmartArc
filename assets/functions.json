@@ -11,6 +11,11 @@
       "actionId": "http.commerce.catalog.storefront.tax.estimateTaxes.after"
     },
     {
+      "id": "http.commerce.catalog.storefront.tax.estimateTaxes.before",
+      "virtualPath": "./dist\\commerce.catalog.storefront.tax.manifest.all.js",
+      "actionId": "http.commerce.catalog.storefront.tax.estimateTaxes.before"
+    },
+    {
       "id": "embedded.commerce.orders.action.before",
       "virtualPath": "./dist\\commerce.orders.manifest.all.js",
       "actionId": "embedded.commerce.orders.action.before"
@@ -54,6 +59,11 @@
       "id": "embedded.commerce.payments.action.after",
       "virtualPath": "./dist\\commerce.payments.manifest.all.js",
       "actionId": "embedded.commerce.payments.action.after"
+    },
+    {
+      "id": "embedded.platform.applications.install",
+      "virtualPath": "./dist\\platform.applications.manifest.all.js",
+      "actionId": "embedded.platform.applications.install"
     },
     {
       "id": "http.storefront.pages.productDetails.request.after",

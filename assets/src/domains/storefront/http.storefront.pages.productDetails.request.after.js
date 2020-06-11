@@ -25,7 +25,7 @@ var xml2js = require('xml2js');
 var parseString = require('xml2js').parseString;
 module.exports = function(context, callback) {
 console.log("sood");
-var themeSettings = JSON.parse(JSON.stringify(context.items.siteContext.themeSettings));
+/*var themeSettings = JSON.parse(JSON.stringify(context.items.siteContext.themeSettings));
 	console.log("JSON : "+JSON.stringify(themeSettings));
 var obj = {
   'InStoreQuantityRequestMessage': {
@@ -70,6 +70,7 @@ var options = {
                   };
                   var post_req = https.request(options, call);
                   post_req.write(xmlDoc);
-                  post_req.end();
+                  post_req.end();*/
+callback();
 				  
 };

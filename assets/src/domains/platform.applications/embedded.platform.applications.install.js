@@ -5,8 +5,324 @@
  */
 
 var ActionInstaller = require('mozu-action-helpers/installers/actions');
+var EntityListClient = require("mozu-node-sdk/clients/platform/entityList");
+var EntityClient = require("mozu-node-sdk/clients/platform/entitylists/entity");
+var constants = require("mozu-node-sdk/constants");
+var paymentConstants = require("../../paypal/constants");
+var helper = require("../../paypal/helper");
+var _ = require("underscore");
+var async = require('async');
 
-module.exports = function(context, callback) {
-  var installer = new ActionInstaller({ context: context.apiContext });
-  installer.enableActions(context).then(callback.bind(null, null), callback);
+
+
+var paypalEntityListName = 'paypalrequest';
+var paypalEntityStructure = {
+    'name': paypalEntityListName,
+    'contextLevel': 'catalog',
+    'nameSpace': 'STEINMART',
+    'useSystemAssignedId': 'false',
+    "idProperty": {
+        "propertyName": "id",
+        "dataType": "string"
+    },
+    "isVisibleInStorefront": "false",
+    "isLocaleSpecific": "false",
+    "isShopperSpecific": "false",
+    "isSandboxDataCloningSupported": "true",
+    "usages": ["siteBuilder", "entityManager"],
+    "indexA": {
+        "dataType": "string",
+        "propertyName": "id"
+    },
+    "indexB": {
+        "dataType": "string",
+        "propertyName": "requestID"
+    },
+    "views": [{
+        "name": "Default",
+        "usages": ["siteBuilder", "entityManager"],
+        "fields": [{
+            "name": "amount",
+            "target": "amount",
+            "type": "string"
+        },{
+            "name": "requestID",
+            "target": "requestID",
+            "type": "string"
+        }]
+    }]
+};
+
+
+
+
+function AppInstall(context, callback) {
+    var self = this;
+    self.ctx = context;
+    self.cb = callback;
+
+    self.initialize = function () {
+        console.log(context);
+        console.log("Getting tenant", self.ctx.apiContext.tenantId);
+        var tenant = context.get.tenant();
+        //enablePaypalExpressWorkflow(tenant);
+    };
+
+    function enablePaypalExpressWorkflow(tenant) {
+
+        try {
+            console.log("Installing PayPal Express payment settings", tenant);
+            var tasks = tenant.sites.map(function (site) {
+                return addUpdatePaymentSettings(context, site);
+            });
+            Promise.all(tasks).then(function (result) {
+                console.log("PayPal Express payment definition installed");
+                //addCustomRoutes(context, tenant);
+            }, function (error) {
+                self.cb(error);
+            });
+        } catch (e) {
+            console.error("Paypal install error", e);
+            self.cb(e);
+        }
+    }
+
+    function addCustomRoutes(context, tenant) {
+        var tasks = tenant.sites.map(
+            function (site) {
+                var customRoutesApi = require("mozu-node-sdk/clients/commerce/settings/general/customRouteSettings")();
+                customRoutesApi.context[constants.headers.SITE] = site.id;
+                return customRoutesApi.getCustomRouteSettings().then(
+                    function (customRoutes) {
+                        return appUpdateCustomRoutes(customRoutesApi, customRoutes);
+                    },
+                    function (err) {
+                        console.log("custom routes get error", err);
+                        return appUpdateCustomRoutes(customRoutesApi, { routes: [] });
+                    }
+                );
+            }
+        );
+
+        Promise.all(tasks).then(function (result) {
+            console.log("PayPal Express custom route installed");
+            enableActions(context, tenant);
+        }, function (error) {
+            self.cb(error);
+        });
+    }
+
+    function appUpdateCustomRoutes(customRoutesApi, customRoutes) {
+        console.log(customRoutes);
+        console.log("route array size", _.size(customRoutes.routes));
+        //Add / Update custom routes for paypal
+        customRoutes = getRoutes(customRoutes, "paypal/token", "paypalToken");
+        customRoutes = getRoutes(customRoutes, "paypal/checkout", "paypalProcessor");
+        
+        return customRoutesApi.updateCustomRouteSettings(customRoutes);
+    }
+
+    function addUpdatePaymentSettings(context, site) {
+        console.log("Adding payment settings for site", site.id);
+        var paymentSettingsClient = require("mozu-node-sdk/clients/commerce/settings/checkout/paymentSettings")();
+        paymentSettingsClient.context[constants.headers.SITE] = site.id;
+        //GetExisting
+        var paymentDef = getPaymentDef();
+        return paymentSettingsClient.getThirdPartyPaymentWorkflowWithValues({ fullyQualifiedName: paymentDef.namespace + "~" + paymentDef.name })
+            .then(function (paymentSettings) {
+                return updateThirdPartyPaymentWorkflow(paymentSettingsClient, paymentSettings);
+            }, function (err) {
+                return paymentSettingsClient.addThirdPartyPaymentWorkflow(paymentDef);
+            });
+    }
+
+    function updateThirdPartyPaymentWorkflow(paymentSettingsClient, existingSettings) {
+        var paymentDef = getPaymentDef(existingSettings);
+        console.log(paymentDef);
+        paymentDef.isEnabled = existingSettings.isEnabled;
+        return paymentSettingsClient.deleteThirdPartyPaymentWorkflow({ "fullyQualifiedName": paymentDef.namespace + "~" + paymentDef.name })
+            .then(function (result) {
+                return paymentSettingsClient.addThirdPartyPaymentWorkflow(paymentDef);
+            });
+    }
+
+    /*function enableActions() {
+        console.log("installing code actions");
+        var installer = new ActionInstaller({ context: self.ctx.apiContext });
+        installer.enableActions(self.ctx, null, {
+            "paypalPaymentActionBefore": function (settings) {
+                settings = settings || {};
+                settings.configuration = settings.configuration || {"gsiURL":"https://fcs.gsipartners.com/eb2c/CartSupportServices/giftcardAuth.wsdl?wsdl","gsiStoreCode":"CTS","gsiCredential":"use_password"};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            },
+            "checkRadialBalance": function (settings) {
+                settings = settings || {};
+                settings.configuration = settings.configuration || {"gsiURL":"https://fcs.gsipartners.com/eb2c/CartSupportServices/giftcardAuth.wsdl?wsdl","gsiStoreCode":"CTS","gsiCredential":"use_password"};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            },
+            "http.commerce.catalog.storefront.tax.estimateTaxes.after": function (settings) {
+                settings = settings || {};
+                settings.configuration = settings.configuration || {"gsiURL":"https://fcs-uat01.uat.gsipartners.com/eb2c/CartSupportServices/taxAndShipService.wsdl?wsdl","gsiStoreCode":"CTS","gsiCredential":"use_password"};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            },
+            "http.commerce.catalog.storefront.productsearch.search.after": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "http.storefront.pages.global.request.after": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "http.storefront.pages.search.request.after": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "http.storefront.pages.productDetails.request.before": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "http.storefront.pages.productDetails.request.after": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "embedded.commerce.payments.action.performPaymentInteraction": function (settings) {
+                settings = settings || {};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            },
+            "paypalValidator": function (settings) {
+                settings = settings || {};
+                return settings;
+            },
+            "paypalProcessor": function (settings) {
+                settings = settings || {};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                settings.configuration = settings.configuration || { "addBillingInfo": true, "missingLastNameValue": "N/A", "allowWarmCheckout": true };
+                return settings;
+            },
+            "registerUser": function (settings) {
+                settings = settings || {};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                settings.configuration = settings.configuration || {"url":"https://offers.christmastreeshops.com/SignupWidget/api/signup/CTSAPI","authToken":"7D620C20-C5B5-43E5-BBB0-385CA016EF3A"};
+                return settings;
+            },
+            "paypalToken": function (settings) {
+                settings = settings || {};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            },
+            "http.storefront.pages.checkout.request.after": function (settings) {
+                settings = settings || {};
+                settings.timeoutMilliseconds = settings.timeoutMilliseconds || 30000;
+                return settings;
+            }
+
+        }).then(self.cb.bind(null, null), self.cb);
+    }*/
+
+
+    function getPaymentDef(existingSettings) {
+        return {
+            "name": paymentConstants.PAYMENTSETTINGID,
+            "namespace": context.get.nameSpace(),
+            "isEnabled": "false",
+            "description": "<div style='font-size:13px;font-style:italic'>Radial Pay Pal Service</div>",
+            "credentials": [
+                getPaymentActionFieldDef("Environment", paymentConstants.ENVIRONMENT, "RadioButton", false, getEnvironmentVocabularyValues(), existingSettings),
+                getPaymentActionFieldDef("Radial End Point URL", paymentConstants.PAYPALENDPOINTURL, "TextBox", false, null, existingSettings),
+                getPaymentActionFieldDef("Radial Paypal API key", paymentConstants.PAYPALAPIKEY, "TextBox", false, null, existingSettings)
+            ]
+        };
+    }
+
+    function getEnvironmentVocabularyValues() {
+        return [
+            getVocabularyContent("production", "en-US", "Production"),
+            getVocabularyContent("sandbox", "en-US", "Sandbox")
+        ];
+    }
+
+    function getVocabularyContent(key, localeCode, value) {
+        return {
+            "key": key,
+            "contents": [{
+                "localeCode": localeCode,
+                "value": value
+            }]
+        };
+    }
+
+    function getPaymentActionFieldDef(displayName, key, type, isSensitive, vocabularyValues, existingSettings) {
+        value = "";
+        if (existingSettings)
+            value = helper.getValue(existingSettings, key);
+
+        return {
+            "displayName": displayName,
+            "apiName": key,
+            "inputType": type,
+            "isSensitive": isSensitive,
+            "vocabularyValues": vocabularyValues,
+            "value": value
+        };
+    }
+
+
+    function getRoutes(customRoutes, template, action) {
+        var route = {
+            "template": template,
+            "internalRoute": "Arcjs",
+            "functionId": action,
+        };
+
+        var index = _.findIndex(customRoutes.routes, function (route) { return route.functionId == action; });
+        if (index <= -1)
+            customRoutes.routes[_.size(customRoutes.routes)] = route;
+        else
+            customRoutes.routes[index] = route;
+
+        return customRoutes;
+
+    }
+}
+
+module.exports = function (context, callback) {
+    console.log("Install initiated");
+    var entitityListClient = EntityListClient(context);
+    entitityListClient.context['user-claims'] = null;
+
+    var entityClient = EntityClient(context);
+    entityClient.context['user-claims'] = null;
+
+    console.log("Installing applications");
+
+    async.series([
+        
+        function (call) {
+            // do some stuff ...
+            entitityListClient.createEntityList(paypalEntityStructure).then(function (res) {
+                console.log("paypal created : " + JSON.stringify(res));
+                call(null, 'paypal');
+            }, function (e) {
+                call(null, null);
+            });
+        },
+        function (call) {
+            try {
+                var appInstall = new AppInstall(context, callback);
+                appInstall.initialize();
+            } catch (e) {
+                call(e);
+            }
+        }
+    ],
+        // optional callback
+        function (err, results) {
+            // results is now equal to ['one', 'three', 'two']
+            console.log("Final results :" + results);
+            callback();
+        });
 };

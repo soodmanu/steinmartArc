@@ -10,8 +10,8 @@ accountAttributes.context['user-claims'] = null;
 
 module.exports = function(context, callback) {
 	var requestFor = context.request.body.requestFor ? context.request.body.requestFor : '';
-	console.log("Request for : '"+requestFor+"'");
-	console.log("request For : "+JSON.stringify(context.request.body));
+	//console.log("Request for : '"+requestFor+"'");
+	//console.log("request For : "+JSON.stringify(context.request.body));
 	var themeSettings = JSON.parse(JSON.stringify(context.items.siteContext.themeSettings));
 
 	if(requestFor === 'ccpaInfo') {

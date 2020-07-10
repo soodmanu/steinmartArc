@@ -20,4 +20,19 @@ module.exports = {
       customFunction: require('./domains/storefront/http.storefront.pages.orderConfirmation.request.after')
   },
   
+  'paypalToken': {
+        actionName: 'http.storefront.routes',
+        customFunction: require('./domains/storefront/paypaltoken')
+    },
+	
+   'paypalProcessor': {
+        actionName: 'http.storefront.routes',
+        customFunction: require('./domains/storefront/paypalProcessor')
+    },
+
+	'productRedirect': {
+        actionName: 'http.storefront.routes',
+        customFunction: require('./domains/storefront/productRedirect')
+    }
+  
 };

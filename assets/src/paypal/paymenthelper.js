@@ -19,16 +19,18 @@ module.exports = {
 			});
 	},
 	getConfig: function (paypalSettings) {
+		console.log("paypalSettings"+helper.getValue(paypalSettings, paymentConstants.PAYPALENDPOINTURL));
+		console.log("PAYPALAPIKEY"+helper.getValue(paypalSettings, paymentConstants.PAYPALAPIKEY));
 		return {
 			environment: helper.getValue(paypalSettings, paymentConstants.ENVIRONMENT) || "sandbox",
-			gsistoreid: helper.getValue(paypalSettings, paymentConstants.GSISTOREID),
-			gsipassword: helper.getValue(paypalSettings, paymentConstants.GSIPASSWORD),
+			paypalRadialUrl: helper.getValue(paypalSettings, paymentConstants.PAYPALENDPOINTURL),
+			paypalKey: helper.getValue(paypalSettings, paymentConstants.PAYPALAPIKEY),
 			enabled: paypalSettings.isEnabled
 		};
 	},
 
 	getPaypalClient: function (config) {
-		return new Paypal.create(config.gsistoreid, config.gsipassword, config.environment === "sandbox");
+		return new Paypal.create(config.paypalRadialUrl, config.paypalKey, config.environment === "sandbox");
 	},
 	validatePaymentSettings: function (context, callback) {
 		var self = this;
@@ -38,7 +40,7 @@ module.exports = {
 
 		var config = self.getConfig(paypalSettings);
 
-		if (!config.environment|| !config.gsistoreid || !config.gsipassword) {
+		if (!config.environment|| !config.paypalRadialUrl || !config.paypalKey) {
 			callback("Radial Paypal Express - Environment/User Name/Password fields are required.");
 			return;
 		}
@@ -168,20 +170,6 @@ module.exports = {
 				return self.getPaymentResult(result, paymentConstants.AUTHORIZED, paymentAction.amount);
 			}, function (err) {
 				return self.getPaymentResult(err, paymentConstants.DECLINED, paymentAction.amount);
-			}).then(function (authResult) {
-				if (config.processingOption === paymentConstants.CAPTUREONSHIPMENT || authResult.status == paymentConstants.DECLINED || authResult.status == paymentConstants.FAILED)
-					return authResult;
-
-				if (!authResult.processingFailed) {
-					//Capture payment
-					self.processPaymentResult(context, authResult, paymentAction.actionName, paymentAction.manualGatewayInteraction);
-				}
-
-				return self.captureAmount(context, config, paymentAction, payment)
-					.then(function (captureResult) {
-						captureResult.captureOnAuthorize = true;
-						return captureResult;
-					});
 			}).catch(function (err) {
 				return self.getPaymentResult({ statusText: err }, paymentConstants.FAILED, paymentAction.amount);
 			});

@@ -137,7 +137,11 @@ var helper = module.exports = {
 			handlingAmount: order.handlingTotal,
 			shippingAmount: order.shippingSubTotal,
 			originalCartId: order.originalCartId,
+			lineItemsTotal:order.lineItemSubtotalWithOrderAdjustments,
+			taxTotal :order.taxTotal,
 			shippingDiscount: self.getShippingDiscountAmount(order),
+			orderNumber:order.orderNumber,
+			orderTotal:order.total,
 			items: self.getItems(order, false)
 		};
 

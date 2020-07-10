@@ -16,9 +16,11 @@
     "time-grunt": "^2.0.0"
   },
   "dependencies": {
+    "easy-guid": "^0.1.3",
     "https": "^1.0.0",
     "jsonix": "^3.0.0",
     "jsonix-schema-compiler": "^2.3.9",
+    "request": "^2.88.2",
     "require": "^2.4.20",
     "underscore": "^1.9.2",
     "xml2js": "^0.4.23",

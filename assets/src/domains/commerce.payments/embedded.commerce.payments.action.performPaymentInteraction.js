@@ -67,7 +67,7 @@
 
 
  */
-
+var paypal = require('../../paypal/checkout');
 module.exports = function(context, callback) {
-  callback();
+    paypal.processPayment(context, callback );
 };

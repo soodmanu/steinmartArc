@@ -15,7 +15,7 @@ var async = require('async');
 
 
 
-var paypalEntityListName = 'paypalrequest';
+var paypalEntityListName = 'paypalrequest@steinmart';
 var paypalEntityStructure = {
     'name': paypalEntityListName,
     'contextLevel': 'catalog',
@@ -65,7 +65,7 @@ function AppInstall(context, callback) {
         console.log(context);
         console.log("Getting tenant", self.ctx.apiContext.tenantId);
         var tenant = context.get.tenant();
-        //enablePaypalExpressWorkflow(tenant);
+        enablePaypalExpressWorkflow(tenant);
     };
 
     function enablePaypalExpressWorkflow(tenant) {
@@ -73,7 +73,7 @@ function AppInstall(context, callback) {
         try {
             console.log("Installing PayPal Express payment settings", tenant);
             var tasks = tenant.sites.map(function (site) {
-                return addUpdatePaymentSettings(context, site);
+                //return addUpdatePaymentSettings(context, site);
             });
             Promise.all(tasks).then(function (result) {
                 console.log("PayPal Express payment definition installed");

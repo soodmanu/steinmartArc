@@ -66,8 +66,8 @@ function convertCartToOrder(context, id, isCart, isMultiShip) {
 function setFulfillmentInfo(context, order, paypalOrder, isMultiShipToEnabled) {
 	var registeredShopper = getUserEmail(context);
 
-	var firstName = paypalOrder.BuyerDetail.First;
-	var lastName = paypalOrder.BuyerDetail.Last;
+	var firstName = paypalOrder.BuyerDetail.First[0];
+	var lastName = paypalOrder.BuyerDetail.Last[0];
 	var contact = {
 		"firstName": firstName,
 		"lastNameOrSurname": lastName,
@@ -81,7 +81,7 @@ function setFulfillmentInfo(context, order, paypalOrder, isMultiShipToEnabled) {
 			"cityOrTown": paypalOrder.ShipTo.City,
 			"stateOrProvince": paypalOrder.ShipTo.State,
 			"postalOrZipCode": paypalOrder.ShipTo.PostalCode,
-			"countryCode": paypalOrder.PayerCountry,
+			"countryCode": paypalOrder.ShipTo.CountryCode,
 			"addressType": "Residential",
 			"isValidated": "true"
 		}
@@ -118,8 +118,8 @@ function setPayment(context, order, token, payerId, paypalOrder, addBillingInfo,
 	var registeredShopper = getUserEmail(context);
 	var billingContact = { 
 		"email": registeredShopper || paypalOrder.BuyerEmail,
-		"firstName": paypalOrder.BuyerDetail.First,
-		"lastNameOrSurname": paypalOrder.BuyerDetail.Last,
+		"firstName": paypalOrder.BuyerDetail.First[0],
+		"lastNameOrSurname": paypalOrder.BuyerDetail.Last[0],
 		"phoneNumbers": { "home": paypalOrder.BuyerPhoneNumber || "N/A" },
 		"address": {
 			"address1": paypalOrder.ShipTo.Line1,
@@ -161,7 +161,7 @@ function setPayment(context, order, token, payerId, paypalOrder, addBillingInfo,
 	var entityResource = require('mozu-node-sdk/clients/platform/entitylists/entity')(context);
 		entityResource.context['user-claims'] = null;
 	return entityResource.getEntity({
-		'entityListFullName': 'paypalrequest@cts',
+		'entityListFullName': 'paypalrequest@steinmart',
 		'id': cartId
 	}).then(function(resp){
 		if (resp && resp.requestID) {
@@ -279,57 +279,97 @@ var paypalCheckout = module.exports = {
 		};
 		var redirectUrl = createRedirectUrl();
 		var cancelUrl = createCancelUrl();
-		return paymentHelper.getPaymentConfig(context).then(function (config) {
+		if(isCart){
+			return paymentHelper.getPaymentConfig(context).then(function (config) {
+				if (!config.enabled) return callback();
+					   return {
+							config: config
+						};
+					
+				
+			}).then(function (response) {
+				var client = paymentHelper.getPaypalClient(response.config);
+				client.setPayOptions(1, 0, 0);
+				return convertCartToOrder(context, id, isCart, false).then(
+					function (order) {
+						return {
+							config: response.config,
+							order: helper.getOrderDetails(order, true)
+							
+						};
+					}
+				);
+			}).then(function (response) {
+				//get Paypal order details
+				var client = paymentHelper.getPaypalClient(response.config);
+				return client.setExpressCheckoutPayment(
+							response.order,
+							redirectUrl,
+							cancelUrl,
+							{
+								id: response.order.orderNumber,
+								domain: domain
+							}
+				   );
+				});
+		}else{
+			
+			return paymentHelper.getPaymentConfig(context).then(function (config) {
 			if (!config.enabled) return callback();
 			return self.getCheckoutSettings(context).then(function (settings) {
 				redirectUrl = createRedirectUrl(settings.isMultishipEnabled);
 				cancelUrl = createCancelUrl(settings.isMultishipEnabled);
 				return helper.getOrder(context, id, isCart, settings.isMultishipEnabled).then(function (order) {
 					order.email = getUserEmail(context);
-					return {
-						config: config,
-						order: helper.getOrderDetails(order, true)
-					};
+						return {
+							config: config,
+							order: helper.getOrderDetails(order, true)
+						};
+					});
 				});
+			}).then(function (response) {
+				var client = paymentHelper.getPaypalClient(response.config);
+				client.setPayOptions(1, 0, 0);
+				if (context.configuration && context.configuration.paypal && context.configuration.paypal.setExpressCheckout)
+					response.order.maxAmount = context.configuration.paypal.setExpressCheckout.maxAmount;
+				return client.setExpressCheckoutPayment(
+					response.order,
+					redirectUrl,
+					cancelUrl,
+					{
+						id: response.order.orderNumber,
+						domain: domain
+					}
+				);
 			});
-		}).then(function (response) {
-			var client = paymentHelper.getPaypalClient(response.config);
-			client.setPayOptions(1, 0, 0);
-			if (context.configuration && context.configuration.paypal && context.configuration.paypal.setExpressCheckout)
-				response.order.maxAmount = context.configuration.paypal.setExpressCheckout.maxAmount;
-			return client.setExpressCheckoutPayment(
-				response.order,
-				redirectUrl,
-				cancelUrl,
-				{
-					id: id,
-					domain: domain
-				}
-			);
-		});
 
+		
+		}
 	},
 	process: function (context, queryString, isCart, isMultiShipToEnabled) {
 		var self = this;
 		var id = queryString.id;
 		var token = queryString.token;
+		console.log("token value is"+token);
 		var payerId = queryString.PayerID;
 		id = id.split("|")[0];
 		if (!id || !payerId || !token)
 			throw new Error("id or payerId or token is missing");
-
+	   console.log("inside get express checkout details");
 		var addBillingInfo = true;
+		
 		return paymentHelper.getPaymentConfig(context).then(function (config) {
 			return config;
 		}).then(function (config) {
 			//convert card to order or get existing order
-			return convertCartToOrder(context, id, isCart, isMultiShipToEnabled).then(
+			return convertCartToOrder(context, id, isCart, false).then(
 				function (order) {
 					var existingShippingMethodCode = order.groupings;//order.fulfillmentInfo.shippingMethodCode;
 					var shipItems = _.filter(order.items, function (item) { return item.fulfillmentMethod === "Ship"; });
 					var requiresFulfillmentInfo = false;
 					if (shipItems && shipItems.length > 0)
 						requiresFulfillmentInfo = true;
+					
 					return {
 						config: config,
 						order: order,
@@ -341,18 +381,33 @@ var paypalCheckout = module.exports = {
 		}).then(function (response) {
 			//get Paypal order details
 			var client = paymentHelper.getPaypalClient(response.config);
-			if (context.configuration && context.configuration.paypal && context.configuration.paypal.getExpressCheckoutDetails)
-				token = context.configuration.paypal.getExpressCheckoutDetails.token;
-
+			/*if (context.configuration && context.configuration.paypal && context.configuration.paypal.getExpressCheckoutDetails)
+				token = context.configuration.paypal.getExpressCheckoutDetails.token;*/
+		
 			return client.getExpressCheckoutDetails(token, context, response.order).
 				then(function (paypalOrder) {
+					
+					response.paypalOrder = paypalOrder;
+					//console.log("response from get express"+JSON.stringify(response.paypalOrder));
+					
+					return response;
+				});
+		}).then(function (response) {
+			//set Shipping address
+			var client = paymentHelper.getPaypalClient(response.config);
+			
+			return client.payPalDoExpressCheckoutRequest(token, context, response.order,response.paypalOrder).
+				then(function (paypalOrder) {
+					//console.log("response from get express"+JSON.stringify(paypalOrder));
 					response.paypalOrder = paypalOrder;
 					return response;
 				});
 		}).then(function (response) {
 			//set Shipping address
+			//console.log("response from doExpressCheckoutRequest"+JSON.stringify(response));
 			return setFulfillmentInfo(context, response.order, response.paypalOrder, isMultiShipToEnabled).
 				then(function (fulfillmentInfo) {
+					isMultiShipToEnabled = false;
 					if (!isMultiShipToEnabled)
 						response.order.fulfillmentInfo = fulfillmentInfo;
 					return response;
@@ -379,6 +434,8 @@ var paypalCheckout = module.exports = {
 	processPayment: function (context, callback, isMultishipEnabled) {
 		var paymentAction = context.get.paymentAction();
 		var payment = context.get.payment();
+		console.log("payment"+payment.paymentType);
+		console.log("paymentAction.actionName"+paymentAction.actionName);
 		if (payment.paymentType !== paymentConstants.PAYMENTSETTINGID) callback();
 		return paymentHelper.getPaymentConfig(context)
 			.then(function (config) {
@@ -389,8 +446,8 @@ var paypalCheckout = module.exports = {
 						return paymentHelper.voidPayment(context, config, paymentAction, payment);
 					case "AuthorizePayment":
 						return paymentHelper.authorizePayment(context, config, paymentAction, payment);
-					case "CapturePayment":
-						return paymentHelper.captureAmount(context, config, paymentAction, payment);
+					/*case "CapturePayment":
+						return paymentHelper.captureAmount(context, config, paymentAction, payment);*/
 					case "CreditPayment":
 						return paymentHelper.creditPayment(context, config, paymentAction, payment);
 					case "DeclinePayment":

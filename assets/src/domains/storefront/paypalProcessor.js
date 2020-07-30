@@ -51,7 +51,7 @@ module.exports = function (context, callback) {
 		isCart = true;
 	}
 	paypal.checkUserSession(context);
-
+	console.log("inside get checkoutexpress2");
 	paypal.getCheckoutSettings(context).then(function (settings) {
 		try {
 			var checkoutUrl = (settings.isMultishipEnabled) ? '/checkoutv2/' : '/checkout/';

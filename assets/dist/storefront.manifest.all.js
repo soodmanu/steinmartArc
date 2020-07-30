@@ -218,7 +218,7 @@ module.exports = function (context, callback) {
 		isCart = true;
 	}
 	paypal.checkUserSession(context);
-
+	console.log("inside get checkoutexpress2");
 	paypal.getCheckoutSettings(context).then(function (settings) {
 		try {
 			var checkoutUrl = (settings.isMultishipEnabled) ? '/checkoutv2/' : '/checkout/';
@@ -573,16 +573,22 @@ function getUserEmail(context) {
 }
 
 var paypalCheckout = module.exports = {
+	
 	getCheckoutSettings: function (context) {
+		console.log("inside get checkout settings");
 		var client = helper.createClientFromContext(generalSettings, context, true);
 		return client.getGeneralSettings().then(function (setting) {
 			return setting;
 		});
 	},
 	checkUserSession: function (context) {
-
+		console.log("user"+(context.items.pageContext));
+		
 		var user = context.items.pageContext.user;
-		if (!user.isAnonymous && !user.IsAuthenticated) {
+		console.log("user"+user.isAuthenticated);
+		console.log("user2"+user.isAnonymous);
+		if (!user.isAnonymous && !user.isAuthenticated) {
+			console.log("inside checkout redirect");
 			var allowWarmCheckout = (context.configuration && context.configuration.allowWarmCheckout);
 			var redirectUrl = '/user/login?returnUrl=' + encodeURIComponent(context.request.url);
 			if (!allowWarmCheckout)
@@ -685,9 +691,10 @@ var paypalCheckout = module.exports = {
 		console.log("token value is"+token);
 		var payerId = queryString.PayerID;
 		id = id.split("|")[0];
+		  console.log("inside get express checkout details");
 		if (!id || !payerId || !token)
 			throw new Error("id or payerId or token is missing");
-	   console.log("inside get express checkout details");
+	 
 		var addBillingInfo = true;
 		
 		return paymentHelper.getPaymentConfig(context).then(function (config) {
@@ -976,10 +983,11 @@ var helper = module.exports = {
 	},
 	getOrderDetails: function(order, includeShipping, paymentAction) {
 		var self = this;
+		console.log("ordershippingtotal"+ order.shippingTotal);
 		var orderDetails = {
 			taxAmount: order.taxTotal || (((order.itemTaxTotal + order.shippingTaxTotal + order.handlingTaxTotal+0.00001) * 100) / 100),
 			handlingAmount: order.handlingTotal,
-			shippingAmount: order.shippingSubTotal,
+			shippingAmount: order.shippingTotal,
 			originalCartId: order.originalCartId,
 			lineItemsTotal:order.lineItemSubtotalWithOrderAdjustments,
 			taxTotal :order.taxTotal,
@@ -1593,7 +1601,7 @@ Paypal.prototype.radialRequest = function (data, methodName) {
 				method: 'POST',
 				url: endpointurl,
 				headers: {
-					'apiKey':'w7fRGlH0IDTznzIgOl9KfWFfggkUkI62',
+					'apiKey':paypalKey,
 					'Content-Type':'application/xml',
 					'Content-Length':bodyContent.length,
 		
@@ -1932,7 +1940,7 @@ Paypal.prototype.payPalDoExpressCheckoutRequest = function (token, context, orde
 		Amount: params.amount,
 		Currency: 'USD',
 		LineItemsTotal: itemsTotal,
-		ShippingTotal: parseFloat(order.shippingAmountBeforeDiscountsAndAdjustments).toFixed(2),
+		ShippingTotal: parseFloat(order.shippingTotal).toFixed(2),
 		TaxTotal:order.taxTotal,
 		Email:  order.email  || ' ',
 		Total:order.total,
@@ -1962,11 +1970,15 @@ Paypal.prototype.setExpressCheckoutPayment = function (order, returnUrl, cancelU
 		addr = order.shippingAddress;
 	}
 	var itemsTotal = 0;
+	var shippingTotal = 0;
 	if(order.handlingAmount > 0 ){
 		itemsTotal = parseFloat(order.lineItemsTotal + order.handlingAmount).toFixed(2);
 	}else {
 		itemsTotal = parseFloat(order.lineItemsTotal).toFixed(2);
 	}
+	
+
+	
 	console.log("itemsTotal"+ itemsTotal );
 	var startExpressRequestBody = {
 		OrderId: others.id || ' ',

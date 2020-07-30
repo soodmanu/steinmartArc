@@ -260,7 +260,7 @@ Paypal.prototype.radialRequest = function (data, methodName) {
 				method: 'POST',
 				url: endpointurl,
 				headers: {
-					'apiKey':'w7fRGlH0IDTznzIgOl9KfWFfggkUkI62',
+					'apiKey':paypalKey,
 					'Content-Type':'application/xml',
 					'Content-Length':bodyContent.length,
 		
@@ -599,7 +599,7 @@ Paypal.prototype.payPalDoExpressCheckoutRequest = function (token, context, orde
 		Amount: params.amount,
 		Currency: 'USD',
 		LineItemsTotal: itemsTotal,
-		ShippingTotal: parseFloat(order.shippingAmountBeforeDiscountsAndAdjustments).toFixed(2),
+		ShippingTotal: parseFloat(order.shippingTotal).toFixed(2),
 		TaxTotal:order.taxTotal,
 		Email:  order.email  || ' ',
 		Total:order.total,
@@ -629,11 +629,15 @@ Paypal.prototype.setExpressCheckoutPayment = function (order, returnUrl, cancelU
 		addr = order.shippingAddress;
 	}
 	var itemsTotal = 0;
+	var shippingTotal = 0;
 	if(order.handlingAmount > 0 ){
 		itemsTotal = parseFloat(order.lineItemsTotal + order.handlingAmount).toFixed(2);
 	}else {
 		itemsTotal = parseFloat(order.lineItemsTotal).toFixed(2);
 	}
+	
+
+	
 	console.log("itemsTotal"+ itemsTotal );
 	var startExpressRequestBody = {
 		OrderId: others.id || ' ',

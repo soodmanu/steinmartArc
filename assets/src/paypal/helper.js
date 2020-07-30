@@ -132,10 +132,11 @@ var helper = module.exports = {
 	},
 	getOrderDetails: function(order, includeShipping, paymentAction) {
 		var self = this;
+		console.log("ordershippingtotal"+ order.shippingTotal);
 		var orderDetails = {
 			taxAmount: order.taxTotal || (((order.itemTaxTotal + order.shippingTaxTotal + order.handlingTaxTotal+0.00001) * 100) / 100),
 			handlingAmount: order.handlingTotal,
-			shippingAmount: order.shippingSubTotal,
+			shippingAmount: order.shippingTotal,
 			originalCartId: order.originalCartId,
 			lineItemsTotal:order.lineItemSubtotalWithOrderAdjustments,
 			taxTotal :order.taxTotal,

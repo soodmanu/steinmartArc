@@ -241,16 +241,22 @@ function getUserEmail(context) {
 }
 
 var paypalCheckout = module.exports = {
+	
 	getCheckoutSettings: function (context) {
+		console.log("inside get checkout settings");
 		var client = helper.createClientFromContext(generalSettings, context, true);
 		return client.getGeneralSettings().then(function (setting) {
 			return setting;
 		});
 	},
 	checkUserSession: function (context) {
-
+		console.log("user"+(context.items.pageContext));
+		
 		var user = context.items.pageContext.user;
-		if (!user.isAnonymous && !user.IsAuthenticated) {
+		console.log("user"+user.isAuthenticated);
+		console.log("user2"+user.isAnonymous);
+		if (!user.isAnonymous && !user.isAuthenticated) {
+			console.log("inside checkout redirect");
 			var allowWarmCheckout = (context.configuration && context.configuration.allowWarmCheckout);
 			var redirectUrl = '/user/login?returnUrl=' + encodeURIComponent(context.request.url);
 			if (!allowWarmCheckout)
@@ -353,9 +359,10 @@ var paypalCheckout = module.exports = {
 		console.log("token value is"+token);
 		var payerId = queryString.PayerID;
 		id = id.split("|")[0];
+		  console.log("inside get express checkout details");
 		if (!id || !payerId || !token)
 			throw new Error("id or payerId or token is missing");
-	   console.log("inside get express checkout details");
+	 
 		var addBillingInfo = true;
 		
 		return paymentHelper.getPaymentConfig(context).then(function (config) {

@@ -143,7 +143,7 @@ module.exports = function (context, callback) {
 
         var builder = new xml2js.Builder();
         var xmlDoc = builder.buildObject(estimateDateObj);
-        console.log("estimated request" + xmlDoc);
+        console.log("estimated request"+xmlDoc);
         var hostName = context.configuration.hostname;
         var deliveryPath = context.configuration.deliveryDateRadialPath;
         var deliveyDateRadialKey = context.configuration.deliveryDateRadialKey;
@@ -218,11 +218,12 @@ module.exports = function (context, callback) {
 							{
 								"fullyQualifiedName": "tenant~estFromDate",
 								"values": [JSON.stringify(estimateFromDate)]
-							}
+							},
+							
 							
 							
 							];
-							//console.log("orderAttributeObject : "+JSON.stringify(orderAttributeObject));
+							console.log("orderAttributeObject : "+JSON.stringify(dateAttributeObject));
 							var orderAttributeClient = OrderAttributeClient(context);
 							orderAttributeClient.context['user-claims'] = null;
 							orderAttributeClient.updateOrderAttributes({
@@ -231,7 +232,7 @@ module.exports = function (context, callback) {
 							}, {
 								body: dateAttributeObject
 							}).then(function (updatedOrder) {
-								console.log("setting attribute data");
+								console.log("setting dateAttributeObject data");
 								//callback();
 								//call(updatedOrder3);
 							}, function (err) {
@@ -243,6 +244,7 @@ module.exports = function (context, callback) {
 
                         } catch (error) {
                             console.log("error" + JSON.stringify(error));
+							callback();
                             //calculateTax(inventoryAddressDetail);
 
                         }
@@ -251,6 +253,8 @@ module.exports = function (context, callback) {
                             console.log("Result Error ");
                         }
                       calculateTax(inventoryAddressDetail);
+					  
+					 
 
                     }
 				 
@@ -283,8 +287,8 @@ module.exports = function (context, callback) {
         if (shippingCode !== undefined && items && items.length) {
 
             if (shippingDiscounts) {
-                console.log("shippingDiscount data1" + shippingDiscounts);
-                shippingDiscountAmount = shippingDiscounts[0].Impact;
+                console.log("shippingDiscount data1" + shippingDiscounts[0].impact);
+                shippingDiscountAmount = shippingDiscounts[0].impact;
             }
             _.each(items, function (itemData, index) {
                 console.log("itemData" + itemData.lineItemPrice);
@@ -345,8 +349,8 @@ module.exports = function (context, callback) {
                     "Quantity": itemData.quantity,
                     "Pricing": {
                         "Merchandise": {
-                            "Amount": itemPrice,
-                            "TaxClass": taxclass,
+                            "Amount": itemPrice
+                            
                         },
 
                     }
@@ -411,33 +415,49 @@ module.exports = function (context, callback) {
 
                 }
 				console.log("inside tax7");
+				
+				
                 var merchandiseUnitPrice = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Merchandise;
+				
+				if(taxclass != ""){
+					Object.assign(merchandiseUnitPrice, {
+                    "TaxClass": taxclass
+					});
+				}
                 var unitPrice = itemData.lineItemPrice / itemData.quantity;
 				unitPrice = unitPrice.toFixed(2);
                 Object.assign(merchandiseUnitPrice, {
                     "UnitPrice": unitPrice
                 });
+				
+				
 
                 if (shippingChargeableItems.includes(itemData.productCode)) {
 
                     prorateShippingAmount = getProrateShippingAmount(itemData.lineItemPrice, shippingchargeableItemCost, requestBody.shippingAmount);
                     var pricingObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing;
+					 console.log("pricingObj" + JSON.stringify(pricingObj));
+					 console.log("inside tax8"+prorateShippingAmount);
+					
                     Object.assign(pricingObj, {
                         "Shipping": {
                             "Amount": prorateShippingAmount,
                             "TaxClass": "93000"
                         }
                     });
-
-                    if (shippingDiscountAmount > 0) {
+					console.log("inside tax9"+prorateShippingAmount);
+					var shippingamount = requestBody.shippingAmount;
+					console.log("inside tax10"+shippingamount);
+                    if (shippingDiscountAmount > 0 && shippingamount > 0 ) {
+						console.log("inside tax10");
                         prorateShippingDiscountAmount = getProrateShippingAmount(itemData.lineItemPrice, shippingchargeableItemCost, shippingDiscountAmount);
-
+						console.log("inside shipping discount"+shippingDiscountAmount);
                         var shippingObj = obj.TaxDutyQuoteRequest.Shipping.ShipGroups.ShipGroup.Items.OrderItem[index].Pricing.Shipping;
                         Object.assign(shippingObj, {
                             "PromotionalDiscounts": {
                                 "Discount": {
                                     $: {
-                                        'id': 'ItemDisc_001',
+                                        'id': 'ShipDisc_001',
                                         "calculateDuty": "false"
 
                                     },
@@ -683,13 +703,15 @@ module.exports = function (context, callback) {
     }
     //console.log("inside tax4");
     function getProrateShippingAmount(sellPrice, totalChargeablePrice, shipingTotal) {
-        var shippingAmount = 0;
+        var proShippingAmount = 0;
         console.log("sellPrice" + sellPrice);
         console.log("totalChargeablePrice" + totalChargeablePrice);
         console.log("shipingTotal" + shipingTotal);
-        shippingAmount = (sellPrice * shipingTotal) / totalChargeablePrice;
-        console.log("shippingAmount" + shippingAmount);
-        return shippingAmount.toFixed(2);
+        proShippingAmount = (sellPrice * shipingTotal) / totalChargeablePrice;
+        
+		proShippingAmount = proShippingAmount.toFixed(2);
+		console.log("prorateShippingAmount" + proShippingAmount);
+        return proShippingAmount;
 
     }
     function getShipTaxData(orderItem, orderTaxData, taxArray, taxShipArray, gstTax) {

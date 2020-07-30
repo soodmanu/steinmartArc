@@ -196,7 +196,33 @@ module.exports = function(context, callback) {
  */
 
 module.exports = function(context, callback) {
-  callback();
+	console.log("payment");
+	var payment = context.get.payment();
+	
+    var ngOrder = context.get.order();
+	console.log("Order2:"+ngOrder.fulfillmentInfo.fulfillmentContact);
+	if(ngOrder.fulfillmentInfo.fulfillmentContact !== null && ngOrder.fulfillmentInfo.fulfillmentContact !== undefined){
+	console.log("Order2:"+ngOrder.fulfillmentInfo.fulfillmentContact.address.address1);
+	console.log("Order:"+ngOrder.fulfillmentInfo.fulfillmentContact.firstName);
+	console.log("Order:"+ngOrder.fulfillmentInfo.fulfillmentContact.lastNameOrSurname);
+	console.log("order:"+ngOrder.fulfillmentInfo.fulfillmentContact.phoneNumbers.home);
+	var shippingData = {
+      "shipping": {
+		"firstName": ngOrder.fulfillmentInfo.fulfillmentContact.firstName,
+		"lastName": ngOrder.fulfillmentInfo.fulfillmentContact.lastNameOrSurname,
+		"phoneNumber":ngOrder.fulfillmentInfo.fulfillmentContact.phoneNumbers.home,
+        "address1": ngOrder.fulfillmentInfo.fulfillmentContact.address.address1,
+        "address2": ngOrder.fulfillmentInfo.fulfillmentContact.address.address2,
+        "cityOrTown": ngOrder.fulfillmentInfo.fulfillmentContact.address.cityOrTown,
+        "postalOrZipCode": ngOrder.fulfillmentInfo.fulfillmentContact.address.postalOrZipCode,
+        "countryCode": ngOrder.fulfillmentInfo.fulfillmentContact.address.countryCode,
+        "stateOrProvince": ngOrder.fulfillmentInfo.fulfillmentContact.address.stateOrProvince
+      }
+	};
+		console.log("Payment:",payment);
+		context.exec.setPaymentData("shippingData",shippingData);
+	}
+	callback();
 };
 },{}],4:[function(require,module,exports){
 /**
@@ -516,16 +542,22 @@ function getUserEmail(context) {
 }
 
 var paypalCheckout = module.exports = {
+	
 	getCheckoutSettings: function (context) {
+		console.log("inside get checkout settings");
 		var client = helper.createClientFromContext(generalSettings, context, true);
 		return client.getGeneralSettings().then(function (setting) {
 			return setting;
 		});
 	},
 	checkUserSession: function (context) {
-
+		console.log("user"+(context.items.pageContext));
+		
 		var user = context.items.pageContext.user;
-		if (!user.isAnonymous && !user.IsAuthenticated) {
+		console.log("user"+user.isAuthenticated);
+		console.log("user2"+user.isAnonymous);
+		if (!user.isAnonymous && !user.isAuthenticated) {
+			console.log("inside checkout redirect");
 			var allowWarmCheckout = (context.configuration && context.configuration.allowWarmCheckout);
 			var redirectUrl = '/user/login?returnUrl=' + encodeURIComponent(context.request.url);
 			if (!allowWarmCheckout)
@@ -628,9 +660,10 @@ var paypalCheckout = module.exports = {
 		console.log("token value is"+token);
 		var payerId = queryString.PayerID;
 		id = id.split("|")[0];
+		  console.log("inside get express checkout details");
 		if (!id || !payerId || !token)
 			throw new Error("id or payerId or token is missing");
-	   console.log("inside get express checkout details");
+	 
 		var addBillingInfo = true;
 		
 		return paymentHelper.getPaymentConfig(context).then(function (config) {
@@ -919,10 +952,11 @@ var helper = module.exports = {
 	},
 	getOrderDetails: function(order, includeShipping, paymentAction) {
 		var self = this;
+		console.log("ordershippingtotal"+ order.shippingTotal);
 		var orderDetails = {
 			taxAmount: order.taxTotal || (((order.itemTaxTotal + order.shippingTaxTotal + order.handlingTaxTotal+0.00001) * 100) / 100),
 			handlingAmount: order.handlingTotal,
-			shippingAmount: order.shippingSubTotal,
+			shippingAmount: order.shippingTotal,
 			originalCartId: order.originalCartId,
 			lineItemsTotal:order.lineItemSubtotalWithOrderAdjustments,
 			taxTotal :order.taxTotal,
@@ -1536,7 +1570,7 @@ Paypal.prototype.radialRequest = function (data, methodName) {
 				method: 'POST',
 				url: endpointurl,
 				headers: {
-					'apiKey':'w7fRGlH0IDTznzIgOl9KfWFfggkUkI62',
+					'apiKey':paypalKey,
 					'Content-Type':'application/xml',
 					'Content-Length':bodyContent.length,
 		
@@ -1875,7 +1909,7 @@ Paypal.prototype.payPalDoExpressCheckoutRequest = function (token, context, orde
 		Amount: params.amount,
 		Currency: 'USD',
 		LineItemsTotal: itemsTotal,
-		ShippingTotal: parseFloat(order.shippingAmountBeforeDiscountsAndAdjustments).toFixed(2),
+		ShippingTotal: parseFloat(order.shippingTotal).toFixed(2),
 		TaxTotal:order.taxTotal,
 		Email:  order.email  || ' ',
 		Total:order.total,
@@ -1905,11 +1939,15 @@ Paypal.prototype.setExpressCheckoutPayment = function (order, returnUrl, cancelU
 		addr = order.shippingAddress;
 	}
 	var itemsTotal = 0;
+	var shippingTotal = 0;
 	if(order.handlingAmount > 0 ){
 		itemsTotal = parseFloat(order.lineItemsTotal + order.handlingAmount).toFixed(2);
 	}else {
 		itemsTotal = parseFloat(order.lineItemsTotal).toFixed(2);
 	}
+	
+
+	
 	console.log("itemsTotal"+ itemsTotal );
 	var startExpressRequestBody = {
 		OrderId: others.id || ' ',

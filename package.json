@@ -22,7 +22,7 @@
     "jsonix-schema-compiler": "^2.3.9",
     "request": "^2.88.2",
     "require": "^2.4.20",
-    "underscore": "^1.9.2",
+    "underscore": "^1.12.1",
     "xml2js": "^0.4.23",
     "xmldom": "^0.3.0",
     "xmlhttprequest": "^1.8.0"
